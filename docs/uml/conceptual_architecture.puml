@@ -1,0 +1,50 @@
+@startuml
+title NetRT Conceptual Architecture
+
+!theme plain
+skinparam componentStyle rectangle
+skinparam packageStyle rectangle
+
+package "Ingestion Layer" {
+    [DICOM Listener Service] as Listener
+    note right of Listener: Handles C-ECHO, C-STORE\nManages Network Associations
+}
+
+package "Data Management Layer" {
+    [File System Manager] as FSM
+    [Study Debouncer] as Debouncer
+    database "Temporary Storage" as Storage
+    note right of Storage: Organized by StudyUID\nSegregated (DCM vs Structure)
+}
+
+package "Processing Core" {
+    [Study Orchestrator] as Orch
+    
+    frame "Processing Pipelines" {
+        [Anonymization Engine] as Anon
+        [Contour Processor] as Contouring
+        [Burn-in / Overlay Engine] as BurnIn
+    }
+}
+
+package "Output Layer" {
+    [Report Generator] as Report
+    [DICOM Sender Service] as Sender
+}
+
+[External Modalities] --> Listener : Push Images (C-STORE)
+Listener --> FSM : Request Save
+FSM --> Storage : Write Files
+Storage ..> Debouncer : File System Events
+Debouncer --> Orch : Trigger "Study Ready"
+
+Orch --> FSM : Load Data
+Orch --> Anon : 1. Anonymize PII
+Orch --> Contouring : 2. Generate Contours/Masks
+Orch --> BurnIn : 3. Create Visual Overlays
+Orch --> Report : 4. Generate Audit Report
+
+Sender <-- Orch : Dispatch Results
+Sender --> [Remote PACS/VNA] : C-STORE Results
+
+@enduml
