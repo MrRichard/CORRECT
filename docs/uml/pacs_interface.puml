@@ -1,0 +1,25 @@
+@startuml
+title CORRECT — Internal Network Overview
+
+!theme plain
+skinparam componentStyle rectangle
+skinparam packageStyle rectangle
+skinparam ArrowFontSize 11
+
+package "Institution Internal Network" {
+
+    component "Treatment Planning\nWorkstation" as TPS
+    component "CORRECT\nApplication" as CORRECT
+    component "Clinical PACS\nor VNA" as PACS
+
+    TPS --> CORRECT : DicomRT + RTSTRUCT\n(C-STORE)
+    CORRECT --> PACS : Processed CT\nwith overlays\n(C-STORE)
+
+}
+
+note bottom of CORRECT
+    Hosted internally.
+    No data leaves the network.
+end note
+
+@enduml
