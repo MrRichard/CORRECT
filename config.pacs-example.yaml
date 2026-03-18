@@ -1,0 +1,84 @@
+# config.pacs-example.yaml
+#
+# Example configuration for running CORRECT with the local PACS stack
+# (docker-compose-pacs.yml). Copy this to pacs-config/config.pacs.yaml
+# and adjust as needed before starting the stack.
+#
+# Key difference from config.yaml: dicom_destination points to the
+# Orthanc service on the Docker-internal network rather than an
+# external PACS.
+
+dicom_listener:
+  host: 0.0.0.0
+  port: 11112
+  ae_title: CORRECT
+
+dicom_destination:
+  # Docker service name — resolves via DNS on the shared pacs_network.
+  ip: orthanc
+  port: 4242
+  ae_title: ORTHANC
+
+watcher:
+  debounce_interval_seconds: 60
+  min_file_count_for_processing: 10
+
+processing:
+  ignore_contour_names_containing: ["skull"]
+
+  overlay_series_number: 999
+  overlay_series_description: "RESEARCH ONLY: Unapproved Treatment Plan CT w Mask"
+  overlay_study_id: "RTPlanShare"
+
+  add_burn_in_disclaimer: true
+  burn_in_text: "FOR RESEARCH USE ONLY - NOT FOR CLINICAL USE"
+
+  segmentation_series_number: 99
+  segmentation_series_description_template: "RESEARCH USE ONLY: CONTOUR {}"
+  segmentation_algorithm_name: "Radiation Oncologist"
+  segmentation_algorithm_version: "v1.0"
+  segmentation_tracking_id: "FOR RESEARCH USE ONLY"
+
+  debug_series_number: 101
+  debug_series_description: "DEBUG: Contour Overlay Visualization"
+
+  debug:
+    generate_jpg_visualizations: false
+    generate_secondary_capture_dicom: false
+
+anonymization:
+  enabled: true
+  site_code: "SITE"
+  pid_mapping_file: "/mnt/shared/pid_mapping.json"
+  study_description: "CORRECT Study Treatment Plan"
+
+  rules:
+    remove_tags:
+      - "AccessionNumber"
+      - "PatientID"
+      - "ReferringPhysicianName"
+      - "OtherPatientIDs"
+      - "PatientBirthDate"
+      - "PatientWeight"
+      - "PatientAge"
+      - "PatientAddress"
+      - "PatientTelephoneNumbers"
+      - "OtherPatientNames"
+      - "PatientMotherBirthName"
+      - "ReferringPhysicianAddress"
+      - "ReferringPhysicianTelephoneNumbers"
+      - "PhysiciansOfRecord"
+      - "OperatorsName"
+      - "InstitutionName"
+      - "InstitutionAddress"
+      - "PerformingPhysicianName"
+      - "RequestingPhysician"
+      - "StudyID"
+    blank_tags: []
+    generate_random_id_prefix: ""
+
+feature_flags:
+  enable_segmentation_export: true
+
+reporting:
+  output_directory: "/mnt/shared"

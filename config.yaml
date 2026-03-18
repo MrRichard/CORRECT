@@ -59,6 +59,13 @@ processing:
   debug_series_number: 101
   debug_series_description: "DEBUG: Contour Overlay Visualization"
 
+  # --- Debug Output Flags ---
+  debug:
+    # Generate JPG images showing colored contour overlays on each CT slice.
+    generate_jpg_visualizations: false
+    # Generate a Secondary Capture DICOM series with colored contour overlays.
+    generate_secondary_capture_dicom: false
+
 anonymization:
   enabled: true
   site_code: "WFU"  # Change this for each site/institution

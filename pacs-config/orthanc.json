@@ -1,0 +1,29 @@
+{
+  "Name": "CORRECT-PACS",
+  "DicomAet": "ORTHANC",
+  "DicomPort": 4242,
+  "HttpPort": 8042,
+
+  // IMPORTANT: Change these credentials before exposing to a network.
+  "AuthenticationEnabled": true,
+  "RegisteredUsers": {
+    "admin": "password"
+  },
+
+  "Plugins": [
+    "/usr/share/orthanc/plugins"
+  ],
+
+  "DicomWeb": {
+    "Enable": true,
+    "Root": "/dicom-web/",
+    "EnableWado": true,
+    "WadoRoot": "/wado",
+    "Ssl": false
+  },
+
+  "Verbose": false,
+
+  "StorageDirectory": "/var/lib/orthanc/db",
+  "IndexDirectory": "/var/lib/orthanc/db"
+}

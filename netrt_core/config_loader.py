@@ -62,11 +62,16 @@ DEFAULT_CONFIG = {
         "overlay_series_number": 98,
         "overlay_series_description": "RESEARCH ONLY: Unapproved Treatment Plan CT w Mask",
         "overlay_study_id": "RTPlanShare",
+        "gsps_series_number": 100,
         "segmentation_series_number": 99,
         "segmentation_series_description_template": "RESEARCH USE ONLY: CONTOUR {}",
         "segmentation_algorithm_name": "Radiation Oncologist",
         "segmentation_algorithm_version": "v1.0",
-        "segmentation_tracking_id": "FOR RESEARCH USE ONLY"
+        "segmentation_tracking_id": "FOR RESEARCH USE ONLY",
+        "debug": {
+            "generate_jpg_visualizations": False,
+            "generate_secondary_capture_dicom": False,
+        },
     },
     "watcher": {
         "debounce_interval_seconds": 60,

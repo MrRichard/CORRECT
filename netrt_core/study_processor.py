@@ -6,6 +6,8 @@ import pydicom
 from .dicom_sender import DicomSender
 from .burn_in_processor import BurnInProcessor
 from .contour_processor import ContourProcessor
+from .gsps_processor import GSPSProcessor
+from .segmentation_processor import SegmentationProcessor
 from .report_generator import ReportGenerator
 from DicomAnonymizer import DicomAnonymizer
 import datetime
@@ -21,6 +23,7 @@ class StudyProcessor:
         self.fsm = file_system_manager
         self.anonymizer = DicomAnonymizer(self.config.get("anonymization", {}))
         self.contour_processor = ContourProcessor(self.config)
+        self.gsps_processor = GSPSProcessor(self.config)
         self.burn_in_processor = BurnInProcessor(self.config.get("processing", {}).get("burn_in_text"))
 
     def process_study(self, study_instance_uid, sender_info=None):
@@ -58,12 +61,38 @@ class StudyProcessor:
                 burn_in_text = self.config.get("processing", {}).get("burn_in_text")
                 success, debug_dicom_dir = self.contour_processor.run(
                     dcm_path, struct_file, addition_path,
-                    self.config.get('debug_mode', False), study_instance_uid,
+                    study_instance_uid,
                     burn_in_text=burn_in_text
                 )
                 if not success:
                     raise Exception("Contour processing failed")
                 report.add_line("Contour processing successful.")
+
+                # Create GSPS alongside the overlay series
+                try:
+                    overlay_files = [
+                        pydicom.dcmread(os.path.join(addition_path, f))
+                        for f in os.listdir(addition_path)
+                        if f.lower().startswith("overlay-") and f.lower().endswith(".dcm")
+                    ]
+                    if overlay_files:
+                        gsps_path = self.gsps_processor.create_gsps(overlay_files, addition_path)
+                        report.add_line(f"GSPS file created: {os.path.basename(gsps_path)}")
+                    else:
+                        logger.warning("No overlay files found for GSPS creation.")
+                except Exception as e:
+                    logger.warning(f"GSPS creation failed (non-critical): {e}", exc_info=True)
+                    report.add_line(f"WARNING: GSPS creation failed: {e}")
+
+                # Create DICOM SEG files if enabled
+                if self.config.get("feature_flags", {}).get("enable_segmentation_export", False):
+                    try:
+                        seg_processor = SegmentationProcessor(self.config)
+                        seg_files = seg_processor.create_segmentations(struct_file, dcm_path, addition_path)
+                        report.add_line(f"DICOM SEG: created {len(seg_files)} segmentation file(s).")
+                    except Exception as e:
+                        logger.warning(f"SEG creation failed (non-critical): {e}", exc_info=True)
+                        report.add_line(f"WARNING: SEG creation failed: {e}")
 
                 if self.config.get("processing", {}).get("add_burn_in_disclaimer", True):
                     report.add_line("Adding burn-in disclaimer...")

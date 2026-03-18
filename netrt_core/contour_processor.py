@@ -30,15 +30,15 @@ class ContourProcessor:
         """
         self.processing_config = config.get("processing", {})
 
-    def run(self, dcm_path, struct_path, output_path, debug_mode=False, study_uid=None, burn_in_text=None):
+    def run(self, dcm_path, struct_path, output_path, study_uid=None, burn_in_text=None):
         """
         Executes the full contour processing pipeline.
         """
         try:
             os.makedirs(output_path, exist_ok=True)
-            
+
             self._ensure_images_have_orientation(dcm_path, struct_path)
-            
+
             rt_struct = RTStructBuilder.create_from(
                 dicom_series_path=dcm_path,
                 rt_struct_path=struct_path
@@ -47,14 +47,18 @@ class ContourProcessor:
             first_contour_mask = self._create_first_contour_mask(rt_struct)
             self._create_overlay_series(dcm_path, first_contour_mask, output_path)
 
+            debug_config = self.processing_config.get("debug", {})
+            generate_jpg = debug_config.get("generate_jpg_visualizations", False)
+            generate_sc_dicom = debug_config.get("generate_secondary_capture_dicom", False)
+
             debug_dicom_dir = None
-            if debug_mode:
+            if generate_jpg or generate_sc_dicom:
                 # For debug visualization, get individual contours for colored display
                 individual_contours = self._get_individual_contours(rt_struct)
-                # Create JPG debug images with colored contours
-                self.save_debug_visualization(dcm_path, individual_contours, os.path.dirname(output_path), study_uid or "UNKNOWN", burn_in_text=burn_in_text)
-                # Create DICOM debug series with colored contours
-                debug_dicom_dir = self.create_debug_dicom_series(dcm_path, individual_contours, os.path.dirname(output_path), study_uid or "UNKNOWN", burn_in_text=burn_in_text)
+                if generate_jpg:
+                    self.save_debug_visualization(dcm_path, individual_contours, os.path.dirname(output_path), study_uid or "UNKNOWN", burn_in_text=burn_in_text)
+                if generate_sc_dicom:
+                    debug_dicom_dir = self.create_debug_dicom_series(dcm_path, individual_contours, os.path.dirname(output_path), study_uid or "UNKNOWN", burn_in_text=burn_in_text)
 
             return True, debug_dicom_dir  # Return debug dir path for sending
         except Exception as e:

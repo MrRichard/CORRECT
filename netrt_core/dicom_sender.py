@@ -4,10 +4,11 @@ from pydicom import dcmread
 from pynetdicom import AE
 from pynetdicom.sop_class import (
     CTImageStorage,
-    MRImageStorage, 
+    MRImageStorage,
     RTStructureSetStorage,
     SegmentationStorage,
-    SecondaryCaptureImageStorage
+    SecondaryCaptureImageStorage,
+    GrayscaleSoftcopyPresentationStateStorage,
 )
 from pydicom.uid import (
     ImplicitVRLittleEndian,
@@ -56,7 +57,8 @@ class DicomSender:
             MRImageStorage,
             RTStructureSetStorage,
             SegmentationStorage,
-            SecondaryCaptureImageStorage
+            SecondaryCaptureImageStorage,
+            GrayscaleSoftcopyPresentationStateStorage,
         ]
         
         # Add contexts for common combinations
