@@ -20,6 +20,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxrender1 \
     libxext6 \
     libgl1 \
+    gosu \
     && rm -rf /var/lib/apt/lists/*
 
 # Set the working directory in the container
@@ -39,13 +40,17 @@ COPY . .
 # These paths should match the defaults in config_loader.py if config is not mounted
 # Or, they serve as mount points if volumes are used.
 RUN mkdir -p /home/appuser/CORRECT_logs /home/appuser/CORRECT_working /app/config /mnt/shared && \
-    chown -R appuser:appgroup  /home/appuser /home/appuser/CORRECT_logs /home/appuser/CORRECT_working /app
+    chown -R appuser:appgroup /home/appuser /home/appuser/CORRECT_logs /home/appuser/CORRECT_working /app /mnt/shared
 
-# Switch to the non-root user
-USER appuser
+# Copy and register the entrypoint script (runs as root to fix volume ownership on startup)
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Define mount points for persistent data and configuration
 VOLUME ["/home/appuser/CORRECT_logs", "/home/appuser/CORRECT_working", "/app/config", "/mnt/shared"]
+
+# Stay as root so the entrypoint can chown mounted volumes, then drop to appuser via gosu
+ENTRYPOINT ["docker-entrypoint.sh"]
 
 # Define the command to run the application
 # It expects config.yaml to be in /app/config/config.yaml

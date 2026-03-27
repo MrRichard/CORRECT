@@ -52,16 +52,22 @@ class NewStudyEventHandler(FileSystemEventHandler):
 
     def _is_study_directory(self, path):
         """Determines if a path is a valid study directory.
-        
-        Study directories are named with the pattern "UID_<StudyInstanceUID>".
-        
+
+        Study directories are named with the pattern "UID_<StudyInstanceUID>" and must
+        be direct children of working_dir. This excludes quarantined studies and any
+        other nested UID_ directories to prevent re-processing loops.
+
         Args:
             path: File system path to check
-            
+
         Returns:
-            bool: True if path is a directory with "UID_" prefix
+            bool: True if path is a direct child of working_dir with "UID_" prefix
         """
-        return os.path.isdir(path) and os.path.basename(path).startswith("UID_")
+        return (
+            os.path.isdir(path)
+            and os.path.basename(path).startswith("UID_")
+            and os.path.dirname(path) == self.fsm.working_dir
+        )
 
     def _get_study_uid_from_path(self, path):
         """Extracts the StudyInstanceUID from a study directory path.
