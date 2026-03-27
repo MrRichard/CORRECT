@@ -57,20 +57,27 @@ DEFAULT_CONFIG = {
     },
    "processing": {
         "ignore_contour_names_containing": ["skull"],
+        "send_original_series": False,
         "add_burn_in_disclaimer": True,
         "burn_in_text": "FOR RESEARCH USE ONLY - NOT FOR CLINICAL USE",
-        "overlay_series_number": 98,
+        "overlay_series_number": 999,
         "overlay_series_description": "RESEARCH ONLY: Unapproved Treatment Plan CT w Mask",
         "overlay_study_id": "RTPlanShare",
         "gsps_series_number": 100,
+        # Recommended overlay display colour for GSPS, as DICOM-scaled CIELab [L, a, b].
+        # Default is pure red (CIELab 53.23, 80.11, 67.22).
+        # Opacity is not standardised in Grayscale Softcopy PS — rendering is viewer-dependent.
+        "gsps_overlay_color_cielab": [34895, 53534, 50196],
         "segmentation_series_number": 99,
         "segmentation_series_description_template": "RESEARCH USE ONLY: CONTOUR {}",
         "segmentation_algorithm_name": "Radiation Oncologist",
         "segmentation_algorithm_version": "v1.0",
         "segmentation_tracking_id": "FOR RESEARCH USE ONLY",
+        "generate_sc_dicom": False,
+        "sc_series_number": 101,
+        "sc_series_description": "SC: Contour Overlay Visualization",
         "debug": {
             "generate_jpg_visualizations": False,
-            "generate_secondary_capture_dicom": False,
         },
     },
     "watcher": {

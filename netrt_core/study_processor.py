@@ -59,7 +59,7 @@ class StudyProcessor:
             if struct_file:
                 report.add_line("Contour processing started...")
                 burn_in_text = self.config.get("processing", {}).get("burn_in_text")
-                success, debug_dicom_dir = self.contour_processor.run(
+                success, sc_dicom_dir = self.contour_processor.run(
                     dcm_path, struct_file, addition_path,
                     study_instance_uid,
                     burn_in_text=burn_in_text
@@ -99,22 +99,31 @@ class StudyProcessor:
                     self.burn_in_processor.run(addition_path)
                     report.add_line("Burn-in disclaimer added.")
 
-                report.add_line("Sending processed series...")
+                # Optionally send the original (unmodified) CT series
+                if self.config.get("processing", {}).get("send_original_series", False):
+                    report.add_line("Sending original series...")
+                    orig_success = self._send_directory(dcm_path, "ORIGINAL", study_instance_uid)
+                    if orig_success:
+                        report.add_line("Original series sent successfully.")
+                    else:
+                        report.add_line("WARNING: Failed to send original series (non-critical).")
+
+                report.add_line("Sending overlay series...")
                 send_success = self._send_directory(addition_path, "OVERLAY", study_instance_uid)
                 if send_success:
-                    report.add_line("Processed series sent successfully.")
+                    report.add_line("Overlay series sent successfully.")
                 else:
-                    report.add_line("ERROR: Failed to send processed series to destination.")
+                    report.add_line("ERROR: Failed to send overlay series to destination.")
                     raise Exception(f"Failed to send overlay series to destination PACS")
 
-                # Send debug DICOM series if created
-                if debug_dicom_dir and os.path.exists(debug_dicom_dir):
-                    report.add_line("Sending debug series...")
-                    debug_send_success = self._send_directory(debug_dicom_dir, "DEBUG", study_instance_uid)
-                    if debug_send_success:
-                        report.add_line("Debug series sent successfully.")
+                # Send Secondary Capture DICOM series if created
+                if sc_dicom_dir and os.path.exists(sc_dicom_dir):
+                    report.add_line("Sending SC series...")
+                    sc_send_success = self._send_directory(sc_dicom_dir, "SC", study_instance_uid)
+                    if sc_send_success:
+                        report.add_line("SC series sent successfully.")
                     else:
-                        report.add_line("WARNING: Failed to send debug series to destination (non-critical).")
+                        report.add_line("WARNING: Failed to send SC series to destination (non-critical).")
             else:
                 logger.warning(f"No RTSTRUCT file found for study {study_instance_uid}. Nothing to process or send.")
                 report.add_line("No RTSTRUCT file found. No processing performed.")

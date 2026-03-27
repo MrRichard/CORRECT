@@ -48,7 +48,7 @@ class NewStudyEventHandler(FileSystemEventHandler):
         """
         path_parts = path.split(os.sep)
         # Check if any part of the path contains these directory names
-        return any(part in ["Addition", "Segmentations"] for part in path_parts)
+        return any(part in ["Addition", "Segmentations", "SC"] for part in path_parts)
 
     def _is_study_directory(self, path):
         """Determines if a path is a valid study directory.

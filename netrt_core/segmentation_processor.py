@@ -43,6 +43,8 @@ class SegmentationProcessor:
         if not ct_datasets:
             raise ValueError("No CT datasets found to use as SEG source images.")
 
+        logger.info(f"Loaded {len(ct_datasets)} CT datasets for SEG source images.")
+
         os.makedirs(output_dir, exist_ok=True)
 
         series_base_number = self.processing_config.get("segmentation_series_number", 99)
@@ -80,6 +82,12 @@ class SegmentationProcessor:
                 # rt-utils returns (H, W, N_slices); highdicom expects (N_slices, H, W)
                 mask_hwn = rt_struct.get_roi_mask_by_name(roi_name)
                 mask_nhw = np.transpose(mask_hwn, (2, 0, 1)).astype(np.uint8)
+
+                if mask_nhw.shape[0] != len(ct_datasets):
+                    raise ValueError(
+                        f"ROI '{roi_name}': mask has {mask_nhw.shape[0]} slices but "
+                        f"{len(ct_datasets)} CT datasets were loaded — slice count mismatch."
+                    )
 
                 seg_desc = hd.seg.SegmentDescription(
                     segment_number=1,
@@ -119,16 +127,30 @@ class SegmentationProcessor:
         return created_files
 
     def _load_sorted_ct_datasets(self, ct_dicom_dir: str) -> list:
-        """Loads CT DICOM datasets sorted ascending by SliceLocation."""
+        """Loads all CT DICOM datasets sorted by z-position, matching rt-utils slice ordering.
+
+        Sort priority: ImagePositionPatient[2] → SliceLocation → InstanceNumber → filename.
+        All files are loaded regardless of which tags are present so that the resulting
+        list length matches the mask array produced by rt-utils.
+        """
         files = [f for f in os.listdir(ct_dicom_dir) if f.lower().endswith(".dcm")]
-        datasets_with_location = []
+        datasets = []
         for filename in files:
             try:
                 ds = dcmread(os.path.join(ct_dicom_dir, filename))
-                if hasattr(ds, "SliceLocation"):
-                    datasets_with_location.append((float(ds.SliceLocation), ds))
+                datasets.append((filename, ds))
             except Exception as e:
                 logger.warning(f"Could not read CT file {filename}: {e}")
 
-        datasets_with_location.sort(key=lambda x: x[0])
-        return [ds for _, ds in datasets_with_location]
+        def sort_key(item):
+            filename, ds = item
+            if hasattr(ds, "ImagePositionPatient"):
+                return (0, float(ds.ImagePositionPatient[2]))
+            if hasattr(ds, "SliceLocation"):
+                return (1, float(ds.SliceLocation))
+            if hasattr(ds, "InstanceNumber"):
+                return (2, float(ds.InstanceNumber))
+            return (3, 0.0)
+
+        datasets.sort(key=sort_key)
+        return [ds for _, ds in datasets]

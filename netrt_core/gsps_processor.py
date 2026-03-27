@@ -99,11 +99,23 @@ class GSPSProcessor:
 
         gsps.ReferencedSeriesSequence = Sequence(ref_series_seq)
 
-        # Graphic Layer Sequence — required when activating overlays
+        # Graphic Layer Sequence — required when activating overlays.
+        # GraphicLayerRecommendedDisplayCIELabValue tells the viewer what colour to render the
+        # overlay with.  Values are DICOM-scaled CIELab (3 × uint16, 0-65535):
+        #   L_dicom = L*  × 65535 / 100
+        #   a_dicom = (a* + 128) × 65535 / 255
+        #   b_dicom = (b* + 128) × 65535 / 255
+        # Default: pure red  → CIELab (53.23, 80.11, 67.22) → DICOM [34895, 53534, 50196].
+        # Note: opacity/transparency is NOT standardised in the Grayscale Softcopy PS SOP class;
+        # how (and whether) the overlay blends with the image is viewer-dependent.
+        overlay_cielab = self.config.get("processing", {}).get(
+            "gsps_overlay_color_cielab", [34895, 53534, 50196]
+        )
         layer_item = Dataset()
         layer_item.GraphicLayerName = "OVERLAY_LAYER"
         layer_item.GraphicLayerOrder = 1
         layer_item.GraphicLayerDescription = "Contour Overlay"
+        layer_item.GraphicLayerRecommendedDisplayCIELabValue = overlay_cielab
         gsps.GraphicLayerSequence = Sequence([layer_item])
 
         # Overlay Activation Module — activate group 0x6000

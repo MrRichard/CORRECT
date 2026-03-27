@@ -49,18 +49,18 @@ class ContourProcessor:
 
             debug_config = self.processing_config.get("debug", {})
             generate_jpg = debug_config.get("generate_jpg_visualizations", False)
-            generate_sc_dicom = debug_config.get("generate_secondary_capture_dicom", False)
+            generate_sc_dicom = self.processing_config.get("generate_sc_dicom", False)
 
-            debug_dicom_dir = None
+            sc_dicom_dir = None
             if generate_jpg or generate_sc_dicom:
-                # For debug visualization, get individual contours for colored display
+                # Get individual contours for coloured display
                 individual_contours = self._get_individual_contours(rt_struct)
                 if generate_jpg:
                     self.save_debug_visualization(dcm_path, individual_contours, os.path.dirname(output_path), study_uid or "UNKNOWN", burn_in_text=burn_in_text)
                 if generate_sc_dicom:
-                    debug_dicom_dir = self.create_debug_dicom_series(dcm_path, individual_contours, os.path.dirname(output_path), study_uid or "UNKNOWN", burn_in_text=burn_in_text)
+                    sc_dicom_dir = self.create_sc_dicom_series(dcm_path, individual_contours, os.path.dirname(output_path), study_uid or "UNKNOWN", burn_in_text=burn_in_text)
 
-            return True, debug_dicom_dir  # Return debug dir path for sending
+            return True, sc_dicom_dir
         except Exception as e:
             logger.error(f"Failed during contour processing: {e}", exc_info=True)
             return False, None
@@ -331,8 +331,8 @@ class ContourProcessor:
         new_ds.SeriesInstanceUID = series_uid
         
         # Set series-level attributes
-        new_ds.SeriesNumber = self.processing_config.get("debug_series_number", 101)
-        new_ds.SeriesDescription = self.processing_config.get("debug_series_description", "DEBUG: Contour Overlay")
+        new_ds.SeriesNumber = self.processing_config.get("sc_series_number", 101)
+        new_ds.SeriesDescription = self.processing_config.get("sc_series_description", "SC: Contour Overlay Visualization")
         new_ds.Modality = "SC"  # Secondary Capture
         
         # Update dates/times
@@ -425,13 +425,13 @@ class ContourProcessor:
 
         logger.info(f"Debug visualization complete. Images saved to: {debug_dir}")
 
-    def create_debug_dicom_series(self, dcm_path, contour_list, output_dir, study_uid, burn_in_text=None):
-        """Create a DICOM Secondary Capture series from debug visualizations with colored contours."""
-        debug_dicom_dir = os.path.join(output_dir, "DebugDicom")
-        os.makedirs(debug_dicom_dir, exist_ok=True)
+    def create_sc_dicom_series(self, dcm_path, contour_list, output_dir, study_uid, burn_in_text=None):
+        """Create a DICOM Secondary Capture series with coloured contour overlays."""
+        sc_dicom_dir = os.path.join(output_dir, "SC")
+        os.makedirs(sc_dicom_dir, exist_ok=True)
 
         sorted_files = self._sort_dicom_files(dcm_path)
-        logger.info(f"Creating debug DICOM series for {len(sorted_files)} slices with {len(contour_list)} contours in {debug_dicom_dir}")
+        logger.info(f"Creating SC DICOM series for {len(sorted_files)} slices with {len(contour_list)} contours in {sc_dicom_dir}")
 
         # Define color rotation (starting with red)
         colors = ['red', 'blue', 'green', 'yellow', 'cyan', 'magenta', 'orange', 'purple']
@@ -493,12 +493,12 @@ class ContourProcessor:
                 new_ds = self._create_secondary_capture_dicom(ds, rgb_array, new_series_uid, i)
 
                 # Save the DICOM file
-                output_filename = os.path.join(debug_dicom_dir, f"DEBUG-{filename}")
+                output_filename = os.path.join(sc_dicom_dir, f"SC-{filename}")
                 new_ds.save_as(output_filename, enforce_file_format=True)
 
             except Exception as e:
-                logger.warning(f"Could not create debug DICOM for slice {i}: {e}")
+                logger.warning(f"Could not create SC DICOM for slice {i}: {e}")
                 continue
 
-        logger.info(f"Debug DICOM series created in: {debug_dicom_dir}")
-        return debug_dicom_dir
+        logger.info(f"SC DICOM series created in: {sc_dicom_dir}")
+        return sc_dicom_dir
