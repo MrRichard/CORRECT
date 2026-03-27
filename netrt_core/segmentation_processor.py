@@ -43,10 +43,10 @@ class SegmentationProcessor:
         if not ct_datasets:
             raise ValueError("No CT datasets found to use as SEG source images.")
 
-        # highdicom reads several patient tags from source images; ensure they
-        # exist even if stripped by anonymization.
+        # highdicom copies several study/patient tags from source images into
+        # the SEG header. Ensure they exist even if stripped by anonymization.
         for ds in ct_datasets:
-            for tag in ("PatientBirthDate", "PatientSex", "PatientAge", "PatientWeight"):
+            for tag in ("PatientBirthDate", "PatientSex", "AccessionNumber", "StudyID"):
                 if not hasattr(ds, tag):
                     setattr(ds, tag, "")
 
