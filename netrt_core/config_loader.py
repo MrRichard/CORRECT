@@ -28,6 +28,14 @@ DEFAULT_CONFIG = {
         "transaction_log_file": "transaction.log",
         "transaction_log_format": "%(asctime)s TXN [%(levelname)s]: %(message)s"
     },
+    "features": {
+        "send_original_series": True,
+        "create_augmented_series": True,
+        "create_gsps": True,
+        "create_segmentation_export": True,
+        "create_secondary_capture": True,
+        "generate_jpg_visualizations": True,
+    },
     "anonymization": {
         "enabled": True,
         "full_anonymization_enabled": False, 
@@ -57,7 +65,6 @@ DEFAULT_CONFIG = {
     },
    "processing": {
         "ignore_contour_names_containing": ["skull"],
-        "send_original_series": False,
         "add_burn_in_disclaimer": True,
         "burn_in_text": "FOR RESEARCH USE ONLY - NOT FOR CLINICAL USE",
         "overlay_series_number": 999,
@@ -73,19 +80,12 @@ DEFAULT_CONFIG = {
         "segmentation_algorithm_name": "Radiation Oncologist",
         "segmentation_algorithm_version": "v1.0",
         "segmentation_tracking_id": "FOR RESEARCH USE ONLY",
-        "generate_sc_dicom": False,
         "sc_series_number": 101,
         "sc_series_description": "SC: Contour Overlay Visualization",
-        "debug": {
-            "generate_jpg_visualizations": False,
-        },
     },
     "watcher": {
         "debounce_interval_seconds": 60,
         "min_file_count_for_processing": 2
-    },
-    "feature_flags": {
-        "enable_segmentation_export": False
     }
 }
 
@@ -109,6 +109,7 @@ def load_config(config_path="config.yaml"):
                     return base
                 
                 config = _deep_merge_dicts(config, user_config)
+                _normalize_legacy_processing_keys(config)
                 logger.info(f"Successfully loaded and merged configuration from {config_path}")
             else:
                 logger.warning(f"Configuration file {config_path} is empty. Using default configuration.")
@@ -129,6 +130,47 @@ def load_config(config_path="config.yaml"):
                  config["directories"][key] = os.path.expanduser(path_val)
 
     return config
+
+def _normalize_legacy_processing_keys(config):
+    """Map older config keys onto the current config layout."""
+    processing = config.setdefault("processing", {})
+    features = config.setdefault("features", {})
+    debug = processing.get("debug", {})
+    feature_flags = config.get("feature_flags", {})
+
+    if "send_original_series" not in features and "send_original_series" in processing:
+        features["send_original_series"] = processing["send_original_series"]
+
+    if "create_segmentation_export" not in features and "enable_segmentation_export" in feature_flags:
+        features["create_segmentation_export"] = feature_flags["enable_segmentation_export"]
+
+    if "create_secondary_capture" not in features and "generate_sc_dicom" in processing:
+        features["create_secondary_capture"] = processing["generate_sc_dicom"]
+
+    if "generate_jpg_visualizations" not in features and "generate_jpg_visualizations" in debug:
+        features["generate_jpg_visualizations"] = debug["generate_jpg_visualizations"]
+
+    features.setdefault("create_augmented_series", True)
+    features.setdefault("create_gsps", True)
+
+    if "generate_sc_dicom" not in processing and "generate_secondary_capture_dicom" in debug:
+        processing["generate_sc_dicom"] = debug["generate_secondary_capture_dicom"]
+
+    if "sc_series_number" not in processing and "debug_series_number" in processing:
+        processing["sc_series_number"] = processing["debug_series_number"]
+
+    if "sc_series_description" not in processing and "debug_series_description" in processing:
+        processing["sc_series_description"] = processing["debug_series_description"]
+
+    # Keep legacy keys populated so older runtime code paths continue to behave.
+    processing["send_original_series"] = features.get("send_original_series", True)
+    processing["generate_sc_dicom"] = features.get("create_secondary_capture", True)
+    processing.setdefault("debug", {})
+    processing["debug"]["generate_jpg_visualizations"] = features.get("generate_jpg_visualizations", True)
+
+    config["feature_flags"] = {
+        "enable_segmentation_export": features.get("create_segmentation_export", True)
+    }
 
 def _save_default_config(config_path, config_data):
     """Saves the provided configuration data (usually defaults) to the specified path."""

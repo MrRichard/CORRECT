@@ -1,36 +1,38 @@
-# This is an example systemd unit file for runnign the application on 
-# host as a service, not a docker container. 
-# This will require some modification to work on your system.
+# This is an example systemd unit file for running CORRECT directly on the host.
+# Update the paths, user, group, and config locations for your deployment.
 
 [Unit]
-Description=NETRT DICOM Processing Application
-After=network.target
+Description=CORRECT DICOM Processing Application
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
 User=appuser
 Group=appgroup
 
-# Set the working directory to the application root
-WorkingDirectory=/app
+# Set the working directory to the repository root.
+WorkingDirectory=/opt/CORRECT
 
-# Command to start the application
-# Ensure the path to main.py and config.yaml are correct for your deployment
-# The Dockerfile places the app in /app and expects config in /app/config/config.yaml
-ExecStart=/usr/bin/python3 /app/main.py --config /app/config/config.yaml
+# Ensure the configured directories exist and are writable by User/Group:
+#   directories.working
+#   directories.logs
+#   reporting.output_directory
+#   anonymization.pid_mapping_file parent directory
+Environment="PYTHONUNBUFFERED=1"
+
+# Command to start the application.
+# Point --config at the same YAML file that defines the listener, destination,
+# working/log/report directories, and feature flags.
+ExecStart=/usr/bin/python3 /opt/CORRECT/main.py --config /etc/correct/config.yaml
 
 # Restart policy
 Restart=on-failure
 RestartSec=5s
 
 # Standard output and error logging
-# By default, these will go to journald, which is standard for systemd services
 StandardOutput=journal
 StandardError=journal
 
-# Environment variables (if any are needed by the application directly)
-# Environment="PYTHONUNBUFFERED=1"
-
 [Install]
 WantedBy=multi-user.target
-

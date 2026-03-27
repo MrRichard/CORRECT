@@ -51,6 +51,7 @@ def main():
         ae_title=config.get("dicom_listener", {}).get("ae_title", "CORRECT"),
         study_processor_callback=None, # No longer directly used
         file_system_manager=file_system_manager,
+        config=config,
     )
 
     def study_processing_callback(study_instance_uid):
@@ -81,4 +82,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

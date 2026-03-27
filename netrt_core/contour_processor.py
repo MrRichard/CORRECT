@@ -29,6 +29,7 @@ class ContourProcessor:
             config (dict): The application configuration dictionary.
         """
         self.processing_config = config.get("processing", {})
+        self.features = config.get("features", {})
 
     def run(self, dcm_path, struct_path, output_path, study_uid=None, burn_in_text=None):
         """
@@ -45,11 +46,11 @@ class ContourProcessor:
             )
             # Get first non-SKULL contour for overlay series
             first_contour_mask = self._create_first_contour_mask(rt_struct)
-            self._create_overlay_series(dcm_path, first_contour_mask, output_path)
+            if self.features.get("create_augmented_series", True):
+                self._create_overlay_series(dcm_path, first_contour_mask, output_path)
 
-            debug_config = self.processing_config.get("debug", {})
-            generate_jpg = debug_config.get("generate_jpg_visualizations", False)
-            generate_sc_dicom = self.processing_config.get("generate_sc_dicom", False)
+            generate_jpg = self.features.get("generate_jpg_visualizations", True)
+            generate_sc_dicom = self.features.get("create_secondary_capture", True)
 
             sc_dicom_dir = None
             if generate_jpg or generate_sc_dicom:

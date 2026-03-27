@@ -59,17 +59,20 @@ class DicomListener:
         """Handle a C-STORE request event."""
         try:
             dataset = event.dataset
-            
-            # Extract the negotiated transfer syntax if available
+
+            listener_config = self.config.get("dicom_listener", {})
+            use_negotiated_ts = listener_config.get("config_negotiated_transfer_syntax", True)
+
+            # Extract the negotiated transfer syntax if configured and available
             negotiated_ts = None
-            if hasattr(event, 'context') and event.context:
+            if use_negotiated_ts and hasattr(event, 'context') and event.context:
                 negotiated_ts = event.context.transfer_syntax
             
             # Safely log the transfer syntax
             if negotiated_ts:
                 logger.debug(f"Using negotiated transfer syntax for saving: {negotiated_ts}")
             else:
-                logger.debug("No negotiated transfer syntax available, will use default")
+                logger.debug("No negotiated transfer syntax available or configured; will use file meta/default")
 
             # Ensure StudyInstanceUID is present
             if not hasattr(dataset, "StudyInstanceUID") or not dataset.StudyInstanceUID:
@@ -140,4 +143,3 @@ class DicomListener:
         if hasattr(self.ae, "shutdown") and callable(self.ae.shutdown):
             self.ae.shutdown()
         logger.info("DICOM server stopped.")
-

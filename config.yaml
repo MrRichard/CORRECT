@@ -5,6 +5,8 @@ dicom_listener:
   port: 11112
   # AE Title for the DICOM listener
   ae_title: CORRECT
+  # Save incoming instances using the negotiated transfer syntax
+  config_negotiated_transfer_syntax: true
 
 dicom_destination:
   # IP address of the remote DICOM destination
@@ -13,7 +15,31 @@ dicom_destination:
   port: 4242
   # AE Title of the remote DICOM destination
   ae_title: RADIORIIPL
-  
+
+directories:
+  # Working directory for incoming studies
+  working: ~/CORRECT_working
+  # Log directory for application and transaction logs
+  logs: ~/CORRECT_logs
+  # Quarantine folder created under the working directory
+  quarantine_subdir: quarantine
+
+logging:
+  level: INFO
+  format: "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+  application_log_file: application.log
+  transaction_log_file: transaction.log
+  transaction_log_format: "%(asctime)s TXN [%(levelname)s]: %(message)s"
+
+features:
+  # Output and processing checklist. Default behavior is enabled for testing.
+  send_original_series: true
+  create_augmented_series: true
+  create_gsps: true
+  create_segmentation_export: true
+  create_secondary_capture: true
+  generate_jpg_visualizations: true
+
 watcher:
   debounce_interval_seconds: 60
   min_file_count_for_processing: 10
@@ -21,89 +47,62 @@ watcher:
 processing:
   # A list of case-insensitive substrings. Contours with names containing these will be ignored.
   ignore_contour_names_containing: ["skull"]
-  
-  # --- Overlay Series Settings ---
-  # The Series Number to assign to the new series with contour overlays.
+
+  # Overlay series settings.
   overlay_series_number: 999
-
-  # The Series Description for the new overlay series.
   overlay_series_description: "RESEARCH ONLY: Unapproved Treatment Plan CT w Mask"
-
-  # The Study ID to assign to the new overlay series.
   overlay_study_id: "RTPlanShare"
 
-  # --- Burn-In Settings ---
-  # Whether to add a text disclaimer burned into the pixel data of the overlay series.
-  add_burn_in_disclaimer: true
+  # GSPS settings. GSPS creation is attempted automatically whenever overlay files exist.
+  gsps_series_number: 100
+  # Recommended overlay display colour as DICOM-scaled CIELab [L, a, b].
+  gsps_overlay_color_cielab: [34895, 53534, 50196]
 
-  # The text to use for the burn-in disclaimer.
+  # Burn-in settings for the augmented overlay series.
+  add_burn_in_disclaimer: true
   burn_in_text: "FOR RESEARCH USE ONLY - NOT FOR CLINICAL USE"
 
-  # --- Segmentation Series Settings (if enabled via feature_flags) ---
-  # The Series Number to assign to new DICOM SEG objects.
-  segmentation_series_number: 99
-
-  # A template for the Series Description of new SEG objects. {} is replaced with the contour name.
+  # Segmentation series settings.
+  segmentation_series_number: 200
   segmentation_series_description_template: "RESEARCH USE ONLY: CONTOUR {}"
-
-  # The name of the algorithm used for segmentation.
   segmentation_algorithm_name: "Radiation Oncologist"
-
-  # The version of the algorithm used for segmentation.
   segmentation_algorithm_version: "v1.0"
-  
-  # The tracking ID for the segmentation.
   segmentation_tracking_id: "FOR RESEARCH USE ONLY"
 
-  # Debug visualization settings
-  debug_series_number: 101
-  debug_series_description: "DEBUG: Contour Overlay Visualization"
-
-  # --- Debug Output Flags ---
-  debug:
-    # Generate JPG images showing colored contour overlays on each CT slice.
-    generate_jpg_visualizations: false
-    # Generate a Secondary Capture DICOM series with colored contour overlays.
-    generate_secondary_capture_dicom: false
+  # Derived RGB Secondary Capture export.
+  sc_series_number: 300
+  sc_series_description: "SC: Contour Overlay Visualization"
 
 anonymization:
   enabled: true
-  site_code: "WFU"  # Change this for each site/institution
-  pid_mapping_file: "/mnt/shared/pid_mapping.json"  # Persists on host
+  site_code: WFU
+  pid_mapping_file: /mnt/shared/pid_mapping.json
   study_description: "CORRECT Study Treatment Plan"
-
   rules:
     remove_tags:
-      - "AccessionNumber"
-      - "PatientID"
-      
-      # Additional PHI tags you requested
-      - "ReferringPhysicianName"       # (0008,0090)
-      - "OtherPatientIDs"              # (0010,1000)
-      - "PatientBirthDate"             # (0010,0030)
-      - "PatientWeight"                # (0010,1030)
-      - "PatientAge"                   # (0010,1010)
-      
-      # Additional common PHI tags
-      - "PatientAddress"               # (0010,1040)
-      - "PatientTelephoneNumbers"      # (0010,2154)
-      - "OtherPatientNames"            # (0010,1001)
-      - "PatientMotherBirthName"       # (0010,1060)
-      - "ReferringPhysicianAddress"    # (0008,0092)
-      - "ReferringPhysicianTelephoneNumbers"  # (0008,0094)
-      - "PhysiciansOfRecord"           # (0008,1048)
-      - "OperatorsName"                # (0008,1070)
-      - "InstitutionName"              # (0008,0080)
-      - "InstitutionAddress"           # (0008,0081)
-      - "PerformingPhysicianName"      # (0008,1050)
-      - "RequestingPhysician"          # (0032,1032)
-      - "StudyID"                      # (0020,0010)
+      - AccessionNumber
+      - PatientID
+      - ReferringPhysicianName
+      - OtherPatientIDs
+      - PatientBirthDate
+      - PatientWeight
+      - PatientAge
+      - PatientAddress
+      - PatientTelephoneNumbers
+      - OtherPatientNames
+      - PatientMotherBirthName
+      - ReferringPhysicianAddress
+      - ReferringPhysicianTelephoneNumbers
+      - PhysiciansOfRecord
+      - OperatorsName
+      - InstitutionName
+      - InstitutionAddress
+      - PerformingPhysicianName
+      - RequestingPhysician
+      - StudyID
     blank_tags: []
     generate_random_id_prefix: ""
 
-feature_flags:
-  enable_segmentation_export: True
-
 reporting:
-  # The directory where processing reports will be saved.
-  output_directory: "/mnt/shared" # default OVA location
+  # Processing reports are written here.
+  output_directory: /mnt/shared

@@ -69,23 +69,24 @@ class StudyProcessor:
                 report.add_line("Contour processing successful.")
 
                 # Create GSPS alongside the overlay series
-                try:
-                    overlay_files = [
-                        pydicom.dcmread(os.path.join(addition_path, f))
-                        for f in os.listdir(addition_path)
-                        if f.lower().startswith("overlay-") and f.lower().endswith(".dcm")
-                    ]
-                    if overlay_files:
-                        gsps_path = self.gsps_processor.create_gsps(overlay_files, addition_path)
-                        report.add_line(f"GSPS file created: {os.path.basename(gsps_path)}")
-                    else:
-                        logger.warning("No overlay files found for GSPS creation.")
-                except Exception as e:
-                    logger.warning(f"GSPS creation failed (non-critical): {e}", exc_info=True)
-                    report.add_line(f"WARNING: GSPS creation failed: {e}")
+                if self._feature_enabled("create_gsps", True):
+                    try:
+                        overlay_files = [
+                            pydicom.dcmread(os.path.join(addition_path, f))
+                            for f in os.listdir(addition_path)
+                            if f.lower().startswith("overlay-") and f.lower().endswith(".dcm")
+                        ]
+                        if overlay_files:
+                            gsps_path = self.gsps_processor.create_gsps(overlay_files, addition_path)
+                            report.add_line(f"GSPS file created: {os.path.basename(gsps_path)}")
+                        else:
+                            logger.warning("No overlay files found for GSPS creation.")
+                    except Exception as e:
+                        logger.warning(f"GSPS creation failed (non-critical): {e}", exc_info=True)
+                        report.add_line(f"WARNING: GSPS creation failed: {e}")
 
                 # Create DICOM SEG files if enabled
-                if self.config.get("feature_flags", {}).get("enable_segmentation_export", False):
+                if self._feature_enabled("create_segmentation_export", True):
                     try:
                         seg_processor = SegmentationProcessor(self.config)
                         seg_files = seg_processor.create_segmentations(struct_file, dcm_path, addition_path)
@@ -94,13 +95,13 @@ class StudyProcessor:
                         logger.warning(f"SEG creation failed (non-critical): {e}", exc_info=True)
                         report.add_line(f"WARNING: SEG creation failed: {e}")
 
-                if self.config.get("processing", {}).get("add_burn_in_disclaimer", True):
+                if self._feature_enabled("create_augmented_series", True) and self.config.get("processing", {}).get("add_burn_in_disclaimer", True):
                     report.add_line("Adding burn-in disclaimer...")
                     self.burn_in_processor.run(addition_path)
                     report.add_line("Burn-in disclaimer added.")
 
                 # Optionally send the original (unmodified) CT series
-                if self.config.get("processing", {}).get("send_original_series", False):
+                if self._feature_enabled("send_original_series", True):
                     report.add_line("Sending original series...")
                     orig_success = self._send_directory(dcm_path, "ORIGINAL", study_instance_uid)
                     if orig_success:
@@ -108,13 +109,14 @@ class StudyProcessor:
                     else:
                         report.add_line("WARNING: Failed to send original series (non-critical).")
 
-                report.add_line("Sending overlay series...")
-                send_success = self._send_directory(addition_path, "OVERLAY", study_instance_uid)
-                if send_success:
-                    report.add_line("Overlay series sent successfully.")
-                else:
-                    report.add_line("ERROR: Failed to send overlay series to destination.")
-                    raise Exception(f"Failed to send overlay series to destination PACS")
+                if self._feature_enabled("create_augmented_series", True):
+                    report.add_line("Sending overlay series...")
+                    send_success = self._send_directory(addition_path, "OVERLAY", study_instance_uid)
+                    if send_success:
+                        report.add_line("Overlay series sent successfully.")
+                    else:
+                        report.add_line("ERROR: Failed to send overlay series to destination.")
+                        raise Exception(f"Failed to send overlay series to destination PACS")
 
                 # Send Secondary Capture DICOM series if created
                 if sc_dicom_dir and os.path.exists(sc_dicom_dir):
@@ -205,3 +207,8 @@ class StudyProcessor:
             logger.error(f"Failed to send {series_type} series to {sender.ae_title}@{dest_config.get('ip')}:{dest_config.get('port')}")
 
         return success
+
+    def _feature_enabled(self, feature_name, default=True):
+        """Return a normalized feature flag value with backwards-compatible fallbacks."""
+        features = self.config.get("features", {})
+        return features.get(feature_name, default)

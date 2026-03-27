@@ -29,7 +29,7 @@ services:
       - ~/NETRT/data/logs:/home/appuser/CORRECT_logs:rw,z
       
       # Mounts a local directory for the output data.
-      - ~/NETRT/data/output:/mnt/shared
+      - ~/NETRT/data/output:/mnt/shared:rw,z
 
 networks:
   default:

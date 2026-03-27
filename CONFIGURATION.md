@@ -34,6 +34,20 @@ directories:
 
 Paths starting with `~/` are expanded to the user's home directory.
 
+### Features
+
+```yaml
+features:
+  send_original_series: true         # Forward the original CT series unchanged
+  create_augmented_series: true      # Create the overlay-plane CT series
+  create_gsps: true                  # Create GSPS for the augmented series
+  create_segmentation_export: true   # Create DICOM SEG objects
+  create_secondary_capture: true     # Create derived RGB SC images
+  generate_jpg_visualizations: true  # Create JPG debug renders
+```
+
+Use `features` as the on/off checklist. Keep detailed series numbers, labels, and algorithm metadata under `processing`.
+
 ### Processing Options
 
 ```yaml
@@ -56,46 +70,38 @@ processing:
   segmentation_algorithm_name: "Radiation Oncologist"
   segmentation_algorithm_version: "v1.0"
   segmentation_tracking_id: "FOR RESEARCH USE ONLY"
-  
-  # Debug visualization
-  debug_series_number: 101
-  debug_series_description: "DEBUG: Contour Overlay Visualization"
+
+  # GSPS display recommendation
+  gsps_series_number: 100
+  gsps_overlay_color_cielab: [34895, 53534, 50196]
+
+  # Secondary Capture series
+  sc_series_number: 101
+  sc_series_description: "SC: Contour Overlay Visualization"
 ```
 
 ### Anonymization
 
 ```yaml
 anonymization:
-  enabled: true                      # Enable/disable anonymization
-  site_code: "WFU"                   # Site-specific code for PID generation
-  pid_mapping_file: "/mnt/shared/pid_mapping.json"  # Path to PID mapping file
-  
-  # Anonymization rules
+  enabled: true
+  site_code: "WFU"
+  pid_mapping_file: "/mnt/shared/pid_mapping.json"
+  study_description: "CORRECT Study Treatment Plan"
   rules:
-    remove_tags:                     # Tags to completely remove
+    remove_tags:
       - "AccessionNumber"
       - "PatientID"
-      - "ReferringPhysicianName"
-      - "OtherPatientIDs"
       - "PatientBirthDate"
-    blank_tags: []                   # Tags to set to empty string
+    blank_tags: []
 ```
-
-When `enabled` is true, the specified tags are removed, and a consistent, anonymized Patient ID is generated using the `site_code` and `pid_mapping_file`.
 
 ### File System Watcher
 
 ```yaml
 watcher:
-  debounce_interval_seconds: 60       # Wait time after last file activity
-  min_file_count_for_processing: 2   # Minimum files before processing
-```
-
-### Feature Flags
-
-```yaml
-feature_flags:
-  enable_segmentation_export: false  # Create DICOM SEG objects
+  debounce_interval_seconds: 60
+  min_file_count_for_processing: 2
 ```
 
 ### Logging
@@ -121,6 +127,7 @@ If configuration sections are missing, the following defaults apply:
 - **DICOM Listener**: Listens on all interfaces (0.0.0.0) port 11112
 - **Working Directory**: `~/CORRECT_working`
 - **Anonymization**: Enabled, removes AccessionNumber and PatientID
+- **Features**: All output features default to enabled
 - **Processing**: Ignores contours containing "skull", adds burn-in disclaimer
 - **Logging**: INFO level to both console and files
 
@@ -143,14 +150,11 @@ processing:
   overlay_series_description: "RESEARCH ONLY: Treatment Plan CT w Mask"
   add_burn_in_disclaimer: true
 
-anonymization:
-  enabled: true
-  rules:
-    remove_tags:
-      - "AccessionNumber"
-      - "PatientID"
-      - "PatientBirthDate"
-
-feature_flags:
-  enable_segmentation_export: false
+features:
+  send_original_series: true
+  create_augmented_series: true
+  create_gsps: true
+  create_segmentation_export: true
+  create_secondary_capture: true
+  generate_jpg_visualizations: true
 ```
