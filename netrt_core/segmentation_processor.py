@@ -111,6 +111,8 @@ class SegmentationProcessor:
                     instance_number=idx + 1,
                     manufacturer="CORRECT",
                     manufacturer_model_name="CORRECT",
+                    software_versions="1.0",
+                    device_serial_number="1",
                     series_description=series_desc_template.format(roi_name),
                 )
 
