@@ -43,7 +43,12 @@ class BurnInProcessor:
                 logger.warning(f"File {filepath} has no PixelData to apply burn-in. Skipping.")
                 return
 
-            img_rescaled = self._rescale_pixel_array(dcm.pixel_array)
+            pixel_array = dcm.pixel_array
+            if pixel_array.ndim != 2:
+                logger.debug(f"File {filepath} has non-2D pixel data (shape {pixel_array.shape}). Skipping burn-in.")
+                return
+
+            img_rescaled = self._rescale_pixel_array(pixel_array)
             img_watermarked = self._draw_text(img_rescaled)
             
             new_dcm = self._create_new_dicom_dataset(dcm, img_watermarked)
