@@ -43,6 +43,13 @@ class SegmentationProcessor:
         if not ct_datasets:
             raise ValueError("No CT datasets found to use as SEG source images.")
 
+        # highdicom reads several patient tags from source images; ensure they
+        # exist even if stripped by anonymization.
+        for ds in ct_datasets:
+            for tag in ("PatientBirthDate", "PatientSex", "PatientAge", "PatientWeight"):
+                if not hasattr(ds, tag):
+                    setattr(ds, tag, "")
+
         logger.info(f"Loaded {len(ct_datasets)} CT datasets for SEG source images.")
 
         os.makedirs(output_dir, exist_ok=True)
