@@ -47,7 +47,23 @@ processing:
     generate_secondary_capture_dicom: false
 
 anonymization:
-  enabled: true
+  # apply_site_code: When true, generates a site-coded anonymized patient ID
+  # (format: SITE_0001_20240101) and replaces PatientID and PatientName with it.
+  # Requires site_code and pid_mapping_file to be set.
+  # When false, PatientID and PatientName are left unchanged.
+  apply_site_code: true
+
+  # apply_anonymization_rules: When true, removes or blanks the tags listed under
+  # rules.remove_tags and rules.blank_tags, regardless of apply_site_code.
+  # When false, tag rules are not applied (useful if you only want site-code
+  # replacement without stripping other fields, or vice versa).
+  apply_anonymization_rules: true
+
+  # Note: if apply_anonymization_rules is true but apply_site_code is false,
+  # PatientID and PatientName will be removed/blanked only if they appear in
+  # remove_tags or blank_tags. Omit them from those lists to preserve patient
+  # identity while still stripping other sensitive fields.
+
   site_code: "SITE"
   pid_mapping_file: "/mnt/shared/pid_mapping.json"
   study_description: "CORRECT Study Treatment Plan"
@@ -55,7 +71,6 @@ anonymization:
   rules:
     remove_tags:
       - "AccessionNumber"
-      - "PatientID"
       - "ReferringPhysicianName"
       - "OtherPatientIDs"
       - "PatientBirthDate"
@@ -73,7 +88,6 @@ anonymization:
       - "InstitutionAddress"
       - "PerformingPhysicianName"
       - "RequestingPhysician"
-      - "StudyID"
     blank_tags: []
     generate_random_id_prefix: ""
 

@@ -37,30 +37,34 @@ DEFAULT_CONFIG = {
         "generate_jpg_visualizations": True,
     },
     "anonymization": {
-        "enabled": True,
-        "full_anonymization_enabled": False, 
-        "default_tags_to_remove": [ 
-            "AccessionNumber", 
-            "PatientID" 
-        ],
-        "default_tags_to_blank": [ "AccessionNumber", "PatientID" ], # Tags to blank if full_anonymization_enabled is false
-        "full_anonymization_rules": { # Rules for full anonymization
-            "tags_to_remove": [
-                "PatientAddress", "PatientTelephoneNumbers", "PatientMotherBirthName",
-                "OtherPatientIDs", "OtherPatientNames", "PatientBirthName", "PatientSize",
-                "MilitaryRank", "BranchOfService", "EthnicGroup", "PatientComments",
-                "DeviceSerialNumber", "PlateID", "InstitutionName", "InstitutionAddress",
-                "ReferringPhysicianName", "ReferringPhysicianAddress", "ReferringPhysicianTelephoneNumbers",
-                "PhysiciansOfRecord", "OperatorsName", "AdmittingDiagnosesDescription"
+        "apply_site_code": True,
+        "apply_anonymization_rules": True,
+        "site_code": "SITE",
+        "pid_mapping_file": "/mnt/shared/pid_mapping.json",
+        "study_description": "CORRECT Study Treatment Plan",
+        "rules": {
+            "remove_tags": [
+                "AccessionNumber",
+                "ReferringPhysicianName",
+                "OtherPatientIDs",
+                "PatientBirthDate",
+                "PatientWeight",
+                "PatientAge",
+                "PatientAddress",
+                "PatientTelephoneNumbers",
+                "OtherPatientNames",
+                "PatientMotherBirthName",
+                "ReferringPhysicianAddress",
+                "ReferringPhysicianTelephoneNumbers",
+                "PhysiciansOfRecord",
+                "OperatorsName",
+                "InstitutionName",
+                "InstitutionAddress",
+                "PerformingPhysicianName",
+                "RequestingPhysician"
             ],
-            "tags_to_empty": [
-                "StudyID", "PerformingPhysicianName", "RequestingPhysician"
-            ],
-            "tags_to_modify_date": ["StudyDate", "SeriesDate", "AcquisitionDate", "ContentDate", "PatientBirthDate"],
-            "tags_to_modify_time": ["StudyTime", "SeriesTime", "AcquisitionTime", "ContentTime"],
-            "tags_to_regenerate_uid": ["StudyInstanceUID", "SeriesInstanceUID", "SOPInstanceUID", "FrameOfReferenceUID", "MediaStorageSOPInstanceUID"],
-            "patient_id_override": "ANONYMIZED_ID",
-            "patient_name_override": "ANONYMIZED_NAME"
+            "blank_tags": [],
+            "generate_random_id_prefix": ""
         }
     },
    "processing": {

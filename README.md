@@ -7,7 +7,7 @@ CORRECT is a DICOM service that automatically processes RT Structure Sets to cre
 - **DICOM Network Listener**: Receives DICOM studies via C-STORE operations
 - **Automated RT Processing**: Extracts and merges contour data from RTSTRUCT files
 - **Overlay Generation**: Creates new DICOM series with contour masks as overlay planes
-- **Configurable Anonymization**: Removes or modifies specified DICOM tags
+- **Configurable Anonymization**: Independent site-code ID replacement and tag removal/blanking rules
 - **Debug Visualization**: Optional JPG and DICOM debug output for quality assurance
 - **Transaction Logging**: Detailed audit trails for all processing operations
 
@@ -68,7 +68,7 @@ All settings are managed through `config.yaml`. Key parameters include:
 
 - **Network Settings**: DICOM listener and destination configuration
 - **Processing Options**: Contour filtering rules, series descriptions
-- **Anonymization**: Tag removal and modification rules
+- **Anonymization**: Two independent controls — `apply_site_code` for patient ID replacement and `apply_anonymization_rules` for tag removal/blanking
 - **Directories**: Working and log file locations
 
 See [CONFIGURATION.md](CONFIGURATION.md) for complete configuration reference.
@@ -100,7 +100,7 @@ See [CONFIGURATION.md](CONFIGURATION.md) for complete configuration reference.
 - Configure appropriate disk space monitoring for working directories
 - Set up log rotation for application and transaction logs
 - Implement network security controls for DICOM communications
-- Test anonymization rules meet your privacy requirements
+- Review anonymization settings (`apply_site_code`, `apply_anonymization_rules`) to meet your privacy requirements
 - Monitor quarantine directory for failed studies
 
 ## Support

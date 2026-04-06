@@ -82,17 +82,33 @@ processing:
 
 ### Anonymization
 
+Anonymization is split into two independent controls:
+
+| Setting | Description |
+|---|---|
+| `apply_site_code` | Generates a site-coded anonymized patient ID (e.g. `WFU_0001_20240101`) and replaces `PatientID` and `PatientName` in every file. Requires `site_code` and `pid_mapping_file`. |
+| `apply_anonymization_rules` | Removes or blanks the tags listed under `rules.remove_tags` / `rules.blank_tags`. Operates independently of `apply_site_code`. |
+
+Both flags can be combined freely:
+
+- **Both true** (default): full anonymization — site-coded IDs plus tag stripping.
+- **`apply_site_code` only**: replaces patient identity with site codes; other tags are left untouched.
+- **`apply_anonymization_rules` only**: strips/blanks the listed tags without replacing PatientID/PatientName. Add `PatientID` / `PatientName` to `remove_tags` if you also want those removed; omit them to preserve patient identity.
+- **Both false**: no anonymization is performed.
+
 ```yaml
 anonymization:
-  enabled: true
+  apply_site_code: true
+  apply_anonymization_rules: true
   site_code: "WFU"
   pid_mapping_file: "/mnt/shared/pid_mapping.json"
   study_description: "CORRECT Study Treatment Plan"
   rules:
     remove_tags:
       - "AccessionNumber"
-      - "PatientID"
       - "PatientBirthDate"
+      # PatientID and PatientName are intentionally omitted here so they are
+      # preserved when apply_site_code is false. Add them back if needed.
     blank_tags: []
 ```
 
@@ -126,7 +142,7 @@ If configuration sections are missing, the following defaults apply:
 
 - **DICOM Listener**: Listens on all interfaces (0.0.0.0) port 11112
 - **Working Directory**: `~/CORRECT_working`
-- **Anonymization**: Enabled, removes AccessionNumber and PatientID
+- **Anonymization**: Both `apply_site_code` and `apply_anonymization_rules` default to true; removes AccessionNumber and other sensitive tags while preserving PatientID/PatientName (overwritten by site code when `apply_site_code` is true)
 - **Features**: All output features default to enabled
 - **Processing**: Ignores contours containing "skull", adds burn-in disclaimer
 - **Logging**: INFO level to both console and files

@@ -51,7 +51,8 @@ class StudyProcessor:
             struct_file = self._find_struct_file(struct_path)
             report.add_line(f"RTSTRUCT file found: {struct_file}")
 
-            if self.config.get("anonymization", {}).get("enabled", True):
+            anon_cfg = self.config.get("anonymization", {})
+            if anon_cfg.get("apply_site_code", False) or anon_cfg.get("apply_anonymization_rules", False):
                 report.add_line("Anonymization enabled. Anonymizing study...")
                 self._anonymize_study(dcm_path, struct_file)
                 report.add_line("Anonymization complete.")

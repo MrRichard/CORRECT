@@ -74,14 +74,18 @@ processing:
   sc_series_description: "SC: Contour Overlay Visualization"
 
 anonymization:
-  enabled: true
+  # apply_site_code: generates a site-coded anonymized ID (e.g. WFU_0001_20240101) and
+  # replaces PatientID and PatientName with it. Requires site_code and pid_mapping_file.
+  apply_site_code: true
+  # apply_anonymization_rules: removes or blanks tags listed under rules.remove_tags /
+  # rules.blank_tags, independent of whether apply_site_code is enabled.
+  apply_anonymization_rules: true
   site_code: WFU
   pid_mapping_file: /mnt/shared/pid_mapping.json
   study_description: "CORRECT Study Treatment Plan"
   rules:
     remove_tags:
       - AccessionNumber
-      - PatientID
       - ReferringPhysicianName
       - OtherPatientIDs
       - PatientBirthDate
@@ -99,7 +103,6 @@ anonymization:
       - InstitutionAddress
       - PerformingPhysicianName
       - RequestingPhysician
-      - StudyID
     blank_tags: []
     generate_random_id_prefix: ""
 

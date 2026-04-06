@@ -23,7 +23,10 @@ class DicomAnonymizer:
         """
         self.config = anonymization_config or {}
         self.pid_manager = PIDManager(self.config)
-        
+
+        self.apply_site_code = self.config.get("apply_site_code", False)
+        self.apply_anonymization_rules = self.config.get("apply_anonymization_rules", False)
+
         self.tags_to_remove = self.config.get("rules", {}).get("remove_tags", [])
         self.tags_to_empty = self.config.get("rules", {}).get("blank_tags", [])
         
@@ -44,38 +47,41 @@ class DicomAnonymizer:
         if not isinstance(dicom_obj, pydicom.dataset.Dataset):
             logger.error("Object provided for anonymization is not a pydicom Dataset")
             return dicom_obj
-        
-        original_patient_id = getattr(dicom_obj, 'PatientID', '')
-        original_patient_name = str(getattr(dicom_obj, 'PatientName', ''))
-        study_date = getattr(dicom_obj, 'StudyDate', None)
-        
-        anonymized_id = self.pid_manager.get_anonymized_id(
-            original_patient_id, 
-            original_patient_name,
-            study_date
-        )
-        
-        dicom_obj.PatientID = anonymized_id
-        dicom_obj.PatientName = anonymized_id
-        
-        # Set StudyDescription if configured
-        if "study_description" in self.config:
-            dicom_obj.StudyDescription = self.config["study_description"]
-        
-        logger.debug(f"Applied consistent anonymized ID: {anonymized_id}")
-        
-        for tag in self.tags_to_remove:
-            if tag in ['PatientID', 'PatientName', 'StudyDescription']:
-                continue
-            if hasattr(dicom_obj, tag):
-                delattr(dicom_obj, tag)
-        
-        for tag in self.tags_to_empty:
-            if tag in ['PatientID', 'PatientName']:
-                continue
-            if hasattr(dicom_obj, tag):
-                setattr(dicom_obj, tag, '')
-        
+
+        if self.apply_site_code:
+            original_patient_id = getattr(dicom_obj, 'PatientID', '')
+            original_patient_name = str(getattr(dicom_obj, 'PatientName', ''))
+            study_date = getattr(dicom_obj, 'StudyDate', None)
+
+            anonymized_id = self.pid_manager.get_anonymized_id(
+                original_patient_id,
+                original_patient_name,
+                study_date
+            )
+
+            dicom_obj.PatientID = anonymized_id
+            dicom_obj.PatientName = anonymized_id
+
+            if "study_description" in self.config:
+                dicom_obj.StudyDescription = self.config["study_description"]
+
+            logger.debug(f"Applied consistent anonymized ID: {anonymized_id}")
+
+        if self.apply_anonymization_rules:
+            protected = {'PatientID', 'PatientName', 'StudyDescription'} if self.apply_site_code else {'StudyDescription'}
+
+            for tag in self.tags_to_remove:
+                if tag in protected:
+                    continue
+                if hasattr(dicom_obj, tag):
+                    delattr(dicom_obj, tag)
+
+            for tag in self.tags_to_empty:
+                if tag in protected:
+                    continue
+                if hasattr(dicom_obj, tag):
+                    setattr(dicom_obj, tag, '')
+
         return dicom_obj
 
     def anonymize_file(self, filepath):
