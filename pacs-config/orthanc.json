@@ -1,17 +1,19 @@
 {
   "Name": "CORRECT-PACS",
   "DicomAet": "ORTHANC",
-  "DicomPort": 4242,
+  "DicomPort": 11114,
   "HttpPort": 8042,
 
   // IMPORTANT: Change these credentials before exposing to a network.
   "AuthenticationEnabled": true,
+  "SslEnabled" : false,
+  "RemoteAccessAllowed" : true,
   "RegisteredUsers": {
-    "admin": "password"
+    "raduser": "correct"
   },
 
   "Plugins": [
-    "/usr/share/orthanc/plugins"
+    "/usr/local/share/orthanc/plugins"
   ],
 
   "DicomWeb": {
@@ -20,6 +22,12 @@
     "EnableWado": true,
     "WadoRoot": "/wado",
     "Ssl": false
+  },
+
+  // Embedded OHIF viewer — access at http://localhost:8042/ohif/
+  // Requires the DICOMweb plugin (enabled above).
+  "OHIF": {
+    "DataSource": "dicom-web"
   },
 
   "Verbose": false,

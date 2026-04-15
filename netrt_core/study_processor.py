@@ -48,7 +48,7 @@ class StudyProcessor:
                 report.write_report()
                 return False
 
-            struct_file = self._find_struct_file(struct_path)
+            struct_file = self._find_struct_file(struct_path, dcm_path)
             report.add_line(f"RTSTRUCT file found: {struct_file}")
 
             anon_cfg = self.config.get("anonymization", {})
@@ -159,23 +159,84 @@ class StudyProcessor:
     def _validate_inputs(self, dcm_path, study_instance_uid):
         """Validates that the necessary input directories and files exist."""
         if not os.path.isdir(dcm_path) or not os.listdir(dcm_path):
-            logger.error(f"DCM directory is missing or empty for study {study_instance_uid}")
-            self.fsm.quarantine_study(study_instance_uid, "Missing or empty DCM directory")
+            # A directory with only an RTSTRUCT (no CT) is expected when a TPS exports
+            # the structure set under a different StudyInstanceUID. The CT study processor
+            # finds it via cross-study FrameOfReferenceUID search; this directory itself
+            # has nothing to process.
+            logger.info(
+                f"Study {study_instance_uid} has no DCM directory — likely an RTSTRUCT-only "
+                f"study that will be claimed by its paired CT study. Skipping."
+            )
+            self.fsm.cleanup_study_directory(study_instance_uid)
             return False
         return True
 
-    def _find_struct_file(self, struct_dir_path):
-        """Finds the first DICOM file in the Structure directory."""
+    def _find_struct_file(self, struct_dir_path, dcm_path=None):
+        """Finds the RTSTRUCT file for this study.
+
+        First checks the study's own Structure directory. If nothing is found there,
+        scans all other study directories in the working folder for an RTSTRUCT whose
+        FrameOfReferenceUID matches the CT series. This handles the common case where
+        a TPS exports the RTSTRUCT under a different StudyInstanceUID than the CT.
+        """
+        # --- Local Structure directory ---
+        local = self._collect_struct_files(struct_dir_path)
+        if local:
+            if len(local) > 1:
+                logger.warning(f"Multiple RTSTRUCT files found. Using the first one: {local[0]}")
+            return local[0]
+
+        # --- Cross-study search by FrameOfReferenceUID ---
+        if dcm_path is None or not os.path.isdir(dcm_path):
+            return None
+
+        ct_for_uid = self._get_frame_of_reference_uid(dcm_path)
+        if not ct_for_uid:
+            logger.debug("Could not determine FrameOfReferenceUID from CT images; skipping cross-study RTSTRUCT search.")
+            return None
+
+        logger.info(
+            f"No local RTSTRUCT found. Searching other study directories for an RTSTRUCT "
+            f"with FrameOfReferenceUID={ct_for_uid}"
+        )
+
+        for entry in os.listdir(self.fsm.working_dir):
+            candidate_study_path = os.path.join(self.fsm.working_dir, entry)
+            if not entry.startswith("UID_") or candidate_study_path == os.path.dirname(struct_dir_path):
+                continue
+            candidate_struct_dir = os.path.join(candidate_study_path, "Structure")
+            candidates = self._collect_struct_files(candidate_struct_dir)
+            for candidate in candidates:
+                try:
+                    ds = pydicom.dcmread(candidate, stop_before_pixels=True)
+                    rtstruct_for = getattr(ds, "FrameOfReferenceUID", None)
+                    if rtstruct_for == ct_for_uid:
+                        logger.info(f"Found cross-study RTSTRUCT matching FrameOfReferenceUID: {candidate}")
+                        return candidate
+                except Exception as e:
+                    logger.debug(f"Could not read candidate RTSTRUCT {candidate}: {e}")
+
+        return None
+
+    def _collect_struct_files(self, struct_dir_path):
+        """Returns a list of .dcm paths in a Structure directory, or [] if absent."""
         if not os.path.isdir(struct_dir_path) or not os.listdir(struct_dir_path):
-            return None
-        
-        struct_files = [os.path.join(struct_dir_path, f) for f in os.listdir(struct_dir_path) if f.lower().endswith(".dcm")]
-        if not struct_files:
-            return None
-        
-        if len(struct_files) > 1:
-            logger.warning(f"Multiple RTSTRUCT files found. Using the first one: {struct_files[0]}")
-        return struct_files[0]
+            return []
+        return [os.path.join(struct_dir_path, f) for f in os.listdir(struct_dir_path) if f.lower().endswith(".dcm")]
+
+    def _get_frame_of_reference_uid(self, dcm_path):
+        """Returns the FrameOfReferenceUID from the first readable CT file that has it."""
+        for filename in os.listdir(dcm_path):
+            if not filename.lower().endswith(".dcm"):
+                continue
+            try:
+                ds = pydicom.dcmread(os.path.join(dcm_path, filename), stop_before_pixels=True)
+                for_uid = getattr(ds, "FrameOfReferenceUID", None)
+                if for_uid:
+                    return str(for_uid)
+            except Exception:
+                continue
+        return None
 
     def _anonymize_study(self, dcm_path, struct_file_path):
         """Anonymizes all DICOM files in a study."""

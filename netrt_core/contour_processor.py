@@ -31,6 +31,61 @@ class ContourProcessor:
         self.processing_config = config.get("processing", {})
         self.features = config.get("features", {})
 
+    def _get_compatible_dcm_path(self, dcm_path):
+        """
+        Ensures rt-utils receives only DICOM images from a single CT series with
+        consistent dimensions.
+
+        When the DCM directory contains mixed-series images (e.g. CT at 512×512 from
+        one SeriesInstanceUID and DRR/localization images from another), rt-utils builds
+        its volume grid inconsistently, causing shape mismatches when rasterizing contours.
+        Filtering to the majority (SeriesInstanceUID, Rows, Columns) group ensures rt-utils
+        always sees a clean, single-series image set.
+
+        Returns (path_to_use, temp_dir_or_None). The caller must delete temp_dir
+        when it is not None.
+        """
+        import collections
+
+        dcm_files = [f for f in os.listdir(dcm_path) if f.lower().endswith('.dcm')]
+        if not dcm_files:
+            return dcm_path, None
+
+        group_counter = collections.Counter()
+        file_groups = {}
+        for f in dcm_files:
+            try:
+                ds = dcmread(os.path.join(dcm_path, f), stop_before_pixels=True)
+                if hasattr(ds, 'Rows') and hasattr(ds, 'Columns'):
+                    series_uid = getattr(ds, 'SeriesInstanceUID', '')
+                    group = (str(series_uid), int(ds.Rows), int(ds.Columns))
+                    group_counter[group] += 1
+                    file_groups[f] = group
+            except Exception:
+                pass
+
+        if not group_counter:
+            return dcm_path, None
+
+        majority_group, majority_count = group_counter.most_common(1)[0]
+        total = sum(group_counter.values())
+
+        if majority_count == total:
+            return dcm_path, None  # All images are from the same series — no filtering needed
+
+        logger.warning(
+            f"DCM directory contains images from {len(group_counter)} series/dimension groups. "
+            f"Filtering to majority group (series {majority_group[0][:16]}…, "
+            f"{majority_group[1]}×{majority_group[2]}, {majority_count}/{total} files) for rt-utils."
+        )
+
+        temp_dir = tempfile.mkdtemp(prefix="correct_dcm_filtered_")
+        for f, group in file_groups.items():
+            if group == majority_group:
+                os.symlink(os.path.join(dcm_path, f), os.path.join(temp_dir, f))
+
+        return temp_dir, temp_dir
+
     def run(self, dcm_path, struct_path, output_path, study_uid=None, burn_in_text=None):
         """
         Executes the full contour processing pipeline.
@@ -40,10 +95,15 @@ class ContourProcessor:
 
             self._ensure_images_have_orientation(dcm_path, struct_path)
 
-            rt_struct = RTStructBuilder.create_from(
-                dicom_series_path=dcm_path,
-                rt_struct_path=struct_path
-            )
+            filtered_dcm_path, temp_dir = self._get_compatible_dcm_path(dcm_path)
+            try:
+                rt_struct = RTStructBuilder.create_from(
+                    dicom_series_path=filtered_dcm_path,
+                    rt_struct_path=struct_path
+                )
+            finally:
+                if temp_dir and os.path.exists(temp_dir):
+                    shutil.rmtree(temp_dir)
             # Get first non-SKULL contour for overlay series
             first_contour_mask = self._create_first_contour_mask(rt_struct)
             if self.features.get("create_augmented_series", True):

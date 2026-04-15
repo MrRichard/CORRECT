@@ -5,7 +5,7 @@ services:
       args:
         - UID=${UID:-1000}
         - GID=${GID:-1000}
-    container_name: correct
+    container_name: correct_pacs
     restart: unless-stopped
     ports:
       - "11112:11112"
@@ -14,39 +14,26 @@ services:
       - WATCHDOG_USE_POLLING=false
     volumes:
       - ./pacs-config/config.pacs.yaml:/app/config/config.yaml:ro
-      - ~/NETRT/data/working:/home/appuser/CORRECT_working:rw,z
-      - ~/NETRT/data/logs:/home/appuser/CORRECT_logs:rw,z
-      - ~/NETRT/data/output:/mnt/shared
+      - ~/CORRECT_PACS/data/working:/home/appuser/CORRECT_working:rw,z
+      - ~/CORRECT_PACS/data/logs:/home/appuser/CORRECT_logs:rw,z
+      - ~/CORRECT_PACS/data/output:/mnt/shared
     networks:
       - pacs_network
     depends_on:
       - orthanc
 
   orthanc:
-    image: orthancteam/orthanc:latest
-    container_name: orthanc
+    image: jodogne/orthanc-plugins:latest
+    container_name: correct_orthanc
     restart: unless-stopped
     ports:
       - "8042:8042"   # Orthanc web UI and DICOMweb — exposed to host
-      # Port 4242 (DICOM) is internal only; CORRECT routes to it by service name
+      - "4242:4242"   # Port 4242 (DICOM) is internal only; CORRECT routes to it by service name
     volumes:
       - orthanc_data:/var/lib/orthanc/db
       - ./pacs-config/orthanc.json:/etc/orthanc/orthanc.json:ro
     networks:
       - pacs_network
-
-  ohif:
-    image: ohif/viewer:latest
-    container_name: ohif
-    restart: unless-stopped
-    ports:
-      - "3000:80"     # OHIF viewer — open http://localhost:3000 in your browser
-    volumes:
-      - ./pacs-config/ohif-app-config.js:/usr/share/nginx/html/app-config.js:ro
-    networks:
-      - pacs_network
-    depends_on:
-      - orthanc
 
 volumes:
   orthanc_data:

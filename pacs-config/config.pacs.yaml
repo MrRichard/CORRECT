@@ -1,0 +1,110 @@
+# config.pacs-example.yaml
+#
+# Example configuration for running CORRECT with the local Orthanc Server
+# (docker-compose-pacs.yml). Copy this to pacs-config/config.pacs.yaml
+# and adjust as needed before starting the stack.
+#
+# Key difference from config.yaml: dicom_destination points to the
+# Orthanc service on the Docker-internal network rather than an
+# external PACS.
+
+dicom_listener:
+  host: 0.0.0.0
+  port: 11112
+  ae_title: CORRECT
+
+dicom_destination:
+  # Docker service name — resolves via DNS on the shared pacs_network.
+  ip: orthanc
+  port: 11114
+  ae_title: ORTHANC
+
+watcher:
+  debounce_interval_seconds: 60
+  min_file_count_for_processing: 10
+
+processing:
+  # At the Wake site, this is a common automatically included contour.
+  ignore_contour_names_containing: ["skull"]
+
+  # Dicom series with Overlay Plane info addition
+  overlay_series_number: 999
+  overlay_series_description: "RESEARCH ONLY: Unapproved Treatment Plan CT w Mask"
+  overlay_study_id: "RTPlanShare"
+
+  # Burn in configuration - for the OP image series
+  add_burn_in_disclaimer: true
+  burn_in_text: "FOR RESEARCH USE ONLY" # Shortened to fit in frame
+
+  # Dicom Segmentation
+  segmentation_series_number: 200
+  segmentation_series_description_template: "{} - RESEARCH USE ONLY"
+  segmentation_algorithm_name: "Radiation Oncologist"
+  segmentation_algorithm_version: "v1.0"
+  segmentation_tracking_id: "FOR RESEARCH USE ONLY"
+
+  # TODO: These are still considered debug features!
+  # the jpg visualizations ASRE secondary capture images, 
+  # so these options should be consolidated. RAB 4/15
+  debug:
+    generate_jpg_visualizations: false
+    generate_secondary_capture_dicom: false
+
+  # Debug JPEG images
+  debug_series_number: 500
+  debug_series_description: "DEBUG: Contour Overlay Visualization"
+
+anonymization:
+  # apply_site_code: When true, generates a site-coded anonymized patient ID
+  # (format: SITE_0001_20240101) and replaces PatientID and PatientName with it.
+  # Requires site_code and pid_mapping_file to be set.
+  # When false, PatientID and PatientName are left unchanged.
+  apply_site_code: true
+
+  # apply_anonymization_rules: When true, removes or blanks the tags listed under
+  # rules.remove_tags and rules.blank_tags, regardless of apply_site_code.
+  # When false, tag rules are not applied (useful if you only want site-code
+  # replacement without stripping other fields, or vice versa).
+  apply_anonymization_rules: true
+
+  # Note: if apply_anonymization_rules is true but apply_site_code is false,
+  # PatientID and PatientName will be removed/blanked only if they appear in
+  # remove_tags or blank_tags. Omit them from those lists to preserve patient
+  # identity while still stripping other sensitive fields.
+
+  site_code: "TestSite"
+  pid_mapping_file: "/mnt/shared/pid_mapping.json"
+  study_description: "CORRECT Study Treatment Plan"
+
+  rules:
+    remove_tags:
+      - "AccessionNumber"
+      - "ReferringPhysicianName"
+      - "OtherPatientIDs"
+      - "PatientBirthDate"
+      - "PatientWeight"
+      - "PatientAge"
+      - "PatientAddress"
+      - "PatientTelephoneNumbers"
+      - "OtherPatientNames"
+      - "PatientMotherBirthName"
+      - "ReferringPhysicianAddress"
+      - "ReferringPhysicianTelephoneNumbers"
+      - "PhysiciansOfRecord"
+      - "OperatorsName"
+      - "InstitutionName"
+      - "InstitutionAddress"
+      - "PerformingPhysicianName"
+      - "RequestingPhysician"
+    blank_tags: []
+    generate_random_id_prefix: ""
+
+# TODO: This is where I'd like all the output options to go..
+feature_flags:
+  # enable DICOM SEG outputs. 
+  enable_segmentation_export: true
+
+# This is a legacy feature for the OVA container
+# so that it could easily be mapped back to the host OS. 
+reporting:
+  output_directory: "/mnt/shared"
