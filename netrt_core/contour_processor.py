@@ -99,7 +99,8 @@ class ContourProcessor:
             try:
                 rt_struct = RTStructBuilder.create_from(
                     dicom_series_path=filtered_dcm_path,
-                    rt_struct_path=struct_path
+                    rt_struct_path=struct_path,
+                    warn_only=True
                 )
             finally:
                 if temp_dir and os.path.exists(temp_dir):
