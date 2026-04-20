@@ -22,8 +22,8 @@ CORRECT is a DICOM service that automatically processes RT Structure Sets to cre
 
 1. **Clone and Configure**
    ```bash
-   git clone <repository_url>
-   cd NETRT
+   git clone https://github.com/WFU-WFSM/CORRECT.git
+   cd CORRECT
    ```
 
 2. **Edit Configuration**
@@ -71,7 +71,7 @@ All settings are managed through `config.yaml`. Key parameters include:
 - **Anonymization**: Two independent controls — `apply_site_code` for patient ID replacement and `apply_anonymization_rules` for tag removal/blanking
 - **Directories**: Working and log file locations
 
-See [CONFIGURATION.md](CONFIGURATION.md) for complete configuration reference.
+See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for complete configuration reference.
 
 ## Processing Workflow
 
@@ -84,10 +84,10 @@ See [CONFIGURATION.md](CONFIGURATION.md) for complete configuration reference.
 
 ## Documentation
 
-- [ARCHITECTURE.md](ARCHITECTURE.md): System design and component overview
-- [CONFIGURATION.md](CONFIGURATION.md): Complete configuration reference
-- [DEPLOYMENT.md](DEPLOYMENT.md): Docker and systemd deployment instructions
-- [DETAILS.md](DETAILS.md): Technical implementation details
+- [docs/TECHNICAL_GUIDE.md](docs/TECHNICAL_GUIDE.md): Technical architecture and deployment instructions.
+- [docs/CONFIGURATION.md](docs/CONFIGURATION.md): Complete configuration reference.
+- [docs/DISCLAIMER.md](docs/DISCLAIMER.md): Security evaluation and risk disclosure.
+- [docs/LICENSE](docs/LICENSE): MIT License.
 
 ## Requirements
 
