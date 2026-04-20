@@ -1,4 +1,4 @@
-# NETRT Configuration Guide
+# CORRECT Configuration Guide
 
 Configuration is managed through a YAML file (default: `config.yaml`). If the file is missing or invalid, default values are used and a new configuration file is created.
 
@@ -10,7 +10,7 @@ Configuration is managed through a YAML file (default: `config.yaml`). If the fi
 dicom_listener:
   host: "0.0.0.0"                    # IP address to bind to
   port: 11112                        # TCP port number
-  ae_title: "NETRTCORE"              # Application Entity Title
+  ae_title: "CORRECT"              # Application Entity Title
   config_negotiated_transfer_syntax: true  # Use negotiated transfer syntax
 ```
 
