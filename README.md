@@ -22,7 +22,7 @@ CORRECT is a DICOM service that automatically processes RT Structure Sets to cre
 
 1. **Clone and Configure**
    ```bash
-   git clone https://github.com/WFU-WFSM/CORRECT.git
+   git clone https://github.com/MrRichard/CORRECT
    cd CORRECT
    ```
 
