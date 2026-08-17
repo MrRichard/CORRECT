@@ -30,7 +30,7 @@ class NewStudyEventHandler(FileSystemEventHandler):
         # Use a dictionary to track activity in study directories and debounce
         self.study_activity_timers = {}
         self.debounce_interval = self.fsm.config.get("watcher", {}).get("debounce_interval_seconds", 60 )
-        self.min_file_count_for_processing = self.fsm.config.get("watcher", {}).get("min_file_count_for_processing", 5 )
+        self.min_file_count_for_processing = self.fsm.config.get("watcher", {}).get("min_file_count_for_processing", 2)
 
     # ======== Path and Study UID Helper Methods ========
     
@@ -467,7 +467,7 @@ class FileSystemManager:
 
             # Set implementation identifiers
             ds_file_meta.ImplementationClassUID = pydicom.uid.PYDICOM_IMPLEMENTATION_UID
-            ds_file_meta.ImplementationVersionName = "NETRT_CORE_WD_0.1"
+            ds_file_meta.ImplementationVersionName = "CORRECT_CORE_0.3"
 
             # Attach the file meta to the dataset
             dataset.file_meta = ds_file_meta

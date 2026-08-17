@@ -17,19 +17,19 @@ services:
     volumes:
       # Mounts the local config.yaml file as read-only into the container.
       # The container's CMD is set to look for the config at this path.
-      - ~/NETRT/config.yaml:/app/config/config.yaml:ro
+      - ~/CORRECT/config.yaml:/app/config/config.yaml:ro
 
       # Mounts a local directory for the application's working data.
       # This path should correspond to the 'directories.working' path in your config.yaml,
       # but pointing to the path *inside* the container (e.g., /home/appuser/CORRECT_working).
-      - ~/NETRT/data/working:/home/appuser/CORRECT_working:rw,z
+      - ~/CORRECT/data/working:/home/appuser/CORRECT_working:rw,z
 
       # Mounts a local directory for persistent log files.
       # This path should correspond to the 'directories.logs' path in your config.yaml,
-      - ~/NETRT/data/logs:/home/appuser/CORRECT_logs:rw,z
+      - ~/CORRECT/data/logs:/home/appuser/CORRECT_logs:rw,z
       
       # Mounts a local directory for the output data.
-      - ~/NETRT/data/output:/mnt/shared:rw,z
+      - ~/CORRECT/data/output:/mnt/shared:rw,z
 
 networks:
   default:

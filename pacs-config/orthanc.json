@@ -4,12 +4,11 @@
   "DicomPort": 11114,
   "HttpPort": 8042,
 
-  // IMPORTANT: Change these credentials before exposing to a network.
   "AuthenticationEnabled": true,
   "SslEnabled" : false,
   "RemoteAccessAllowed" : true,
   "RegisteredUsers": {
-    "raduser": "correct"
+    "raduser": "CHANGE_ME"
   },
 
   "Plugins": [
@@ -24,8 +23,6 @@
     "Ssl": false
   },
 
-  // Embedded OHIF viewer — access at http://localhost:8042/ohif/
-  // Requires the DICOMweb plugin (enabled above).
   "OHIF": {
     "DataSource": "dicom-web"
   },

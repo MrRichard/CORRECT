@@ -3,7 +3,7 @@ import sys
 import logging
 import argparse
 
-# Adjust path to import from netrt_core, assuming main.py is in the NETRT root directory
+# Adjust path to import from netrt_core, assuming main.py is in the CORRECT root directory
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), ".")))
 
 from netrt_core.config_loader import load_config
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__) # Main application logger
 transaction_logger = logging.getLogger(TRANSACTION_LOGGER_NAME)
 
 def main():
-    parser = argparse.ArgumentParser(description="NETRT DICOM Processing Application")
+    parser = argparse.ArgumentParser(description="CORRECT DICOM Processing Application")
     parser.add_argument("--config", default="config.yaml", help="Path to the configuration file (default: config.yaml)")
     parser.add_argument("--debug", action="store_true", help="Enable debug visualization output") 
     args = parser.parse_args()
@@ -29,7 +29,7 @@ def main():
     # 2. Setup Logging (must be done after config is loaded)
     setup_logging(config)
 
-    logger.info("NETRT Application starting...")
+    logger.info("CORRECT Application starting...")
     logger.info(f"Using configuration file: {os.path.abspath(args.config)}")
     logger.debug(f"Loaded configuration: {config}")
     if config['debug_mode']:
@@ -78,7 +78,7 @@ def main():
             dicom_listener.stop()
         if hasattr(file_system_manager, "stop_watching") and callable(file_system_manager.stop_watching):
             file_system_manager.stop_watching()
-        logger.info("NETRT Application shut down.")
+        logger.info("CORRECT Application shut down.")
 
 if __name__ == "__main__":
     main()

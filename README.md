@@ -43,7 +43,7 @@ CORRECT is a DICOM service that automatically processes RT Structure Sets to cre
 
 3. **Create Data Directories**
    ```bash
-   mkdir -p /DATA/netrt_data/{working,logs}
+   mkdir -p ~/CORRECT/data/{working,logs,output}
    ```
 
 4. **Deploy**

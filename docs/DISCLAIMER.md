@@ -84,20 +84,19 @@ pip-audit -r requirements.txt
 |---|---|---|---|
 | contourpy | 1.3.1 | pyaml | 25.1.0 |
 | cycler | 0.12.1 | pydicom | 3.0.2 |
-| dataclasses | 0.6 | pyjpegls | 1.4.0 |
-| fonttools | 4.60.2 | pynetdicom | 2.0.2 |
-| highdicom | 0.24.0 | pyparsing | 3.2.1 |
-| imageio | 2.37.0 | python-dateutil | 2.9.0.post0 |
-| ipaddress | 1.0.23 | PyWavelets | 1.8.0 |
-| kiwisolver | 1.4.8 | PyYAML | 6.0.2 |
-| lazy_loader | 0.4 | rt-utils | 1.2.7 |
-| matplotlib | 3.10.0 | scikit-image | 0.25.1 |
-| networkx | 3.4.2 | scipy | 1.15.1 |
-| numpy | 2.2.2 | six | 1.17.0 |
-| opencv-python | 4.11.0.86 | tifffile | 2025.1.10 |
-| packaging | 24.2 | tqdm | 4.67.1 |
-| pillow | 12.2.0 | typing_extensions | 4.12.2 |
-| | | watchdog | 6.0.0 |
+| fonttools | 4.60.2 | pyjpegls | 1.4.0 |
+| highdicom | 0.24.0 | pynetdicom | 2.0.2 |
+| imageio | 2.37.0 | pyparsing | 3.2.1 |
+| kiwisolver | 1.4.8 | python-dateutil | 2.9.0.post0 |
+| lazy_loader | 0.4 | PyWavelets | 1.8.0 |
+| matplotlib | 3.10.0 | PyYAML | 6.0.2 |
+| networkx | 3.4.2 | rt-utils | 1.2.7 |
+| numpy | 2.2.2 | scikit-image | 0.25.1 |
+| opencv-python | 4.11.0.86 | scipy | 1.15.1 |
+| packaging | 24.2 | six | 1.17.0 |
+| pillow | 12.2.0 | tifffile | 2025.1.10 |
+| tqdm | 4.67.1 | typing_extensions | 4.12.2 |
+| watchdog | 6.0.0 | | |
 
 CVE databases are updated continuously. Re-run `pip-audit -r requirements.txt` periodically and after any dependency change.
 

@@ -277,32 +277,6 @@ class ContourProcessor:
 
         return contour_list
 
-    def _create_merged_mask(self, rt_struct):
-        """Merges specified ROI contours into a single binary 3D mask."""
-        all_rois = rt_struct.get_roi_names()
-        ignore_terms = self.processing_config.get("ignore_contour_names_containing", ["skull"])
-        rois_to_process = [r for r in all_rois if not any(term.lower() in r.lower() for term in ignore_terms)]
-
-        logger.info(f"Original ROIs found: {all_rois}")
-        logger.info(f"Ignoring contours containing: {ignore_terms}")
-        logger.info(f"ROIs to be merged into mask: {rois_to_process}")
-
-        if not rois_to_process:
-            raise ValueError("No contours left to process after filtering.")
-
-        # Initialize a blank mask with the shape of the 3D image volume
-        base_mask = rt_struct.get_roi_mask_by_name(rois_to_process[0])
-        merged_mask = np.zeros_like(base_mask, dtype=bool)
-
-        for roi in rois_to_process:
-            try:
-                mask_3d = rt_struct.get_roi_mask_by_name(roi)
-                merged_mask = np.logical_or(merged_mask, mask_3d)
-            except Exception as e:
-                logger.warning(f"Could not get mask for ROI '{roi}'. Skipping. Error: {e}")
-
-        return merged_mask
-
     def _sort_dicom_files(self, dcm_path):
         """Sorts DICOM files in a directory by SliceLocation."""
         files = [f for f in os.listdir(dcm_path) if f.lower().endswith('.dcm')]
@@ -351,8 +325,8 @@ class ContourProcessor:
         ds.SeriesInstanceUID = series_uid
 
         # Set new series attributes from config
-        ds.SeriesNumber = self.processing_config.get("overlay_series_number", 98)
-        ds.SeriesDescription = self.processing_config.get("overlay_series_description", "Contour Overlay")
+        ds.SeriesNumber = self.processing_config.get("overlay_series_number", 999)
+        ds.SeriesDescription = self.processing_config.get("overlay_series_description", "RESEARCH ONLY: Unapproved Treatment Plan CT w Mask")
         ds.StudyID = self.processing_config.get("overlay_study_id", "RTPlanShare")
 
         # Update date and time to current

@@ -155,20 +155,3 @@ class PIDManager:
             
             logger.info(f"Created new anonymized ID: {anonymized_id} (PID #{pid_number})")
             return anonymized_id
-    
-    def increment_study_count(self, anonymized_id):
-        """Increment the study count for a patient (for statistics)."""
-        with self._lock:
-            for hash_key, data in self.mapping.items():
-                if data['anonymized_id'] == anonymized_id:
-                    data['study_count'] = data.get('study_count', 0) + 1
-                    self._save_mapping()
-                    break
-    
-    def get_statistics(self):
-        """Get statistics about anonymization."""
-        return {
-            "total_patients": len(self.mapping),
-            "site_code": self.site_code,
-            "mapping_file": self.mapping_file
-        }

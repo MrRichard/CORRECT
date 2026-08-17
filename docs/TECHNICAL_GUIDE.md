@@ -16,7 +16,7 @@ CORRECT is an event-driven DICOM service built around the `netrt_core` package.
 ## Processing Workflow
 
 1.  **Reception**: Files stored in `UID_<StudyUID>/{DCM,Structure}`.
-2.  **Detection**: Debounce monitor (default 5s) triggers processing once file activity ceases.
+2.  **Detection**: Debounce monitor (default 60s) triggers processing once file activity ceases.
 3.  **Validation**: Verifies required CT/MR and RTSTRUCT components.
 4.  **Anonymization**: Optional tag stripping and site-code ID replacement.
 5.  **Processing**: Contours merged into binary masks and added as Group 0x6000 overlays.
@@ -35,11 +35,11 @@ CORRECT is an event-driven DICOM service built around the `netrt_core` package.
 
 ### Systemd (Bare Metal)
 1.  **Dependencies**: `pip install -r requirements.txt`.
-2.  **Service**: Use `netrt.service.example` as a template for `/etc/systemd/system/netrt.service`.
+2.  **Service**: Use `correct.service.example` as a template for `/etc/systemd/system/correct.service`.
 3.  **Manage**:
     ```bash
-    sudo systemctl start netrt.service
-    sudo journalctl -u netrt.service -f
+    sudo systemctl start correct.service
+    sudo journalctl -u correct.service -f
     ```
 
 ## Network & Security

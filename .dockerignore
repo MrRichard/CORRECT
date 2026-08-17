@@ -1,3 +1,5 @@
 .venv/
-netrt.service.example
+.env
+correct.service.example
 *.md
+*.pdf

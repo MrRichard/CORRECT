@@ -56,7 +56,7 @@ processing:
   ignore_contour_names_containing: ["skull"]
   
   # Overlay series settings
-  overlay_series_number: 98
+  overlay_series_number: 999
   overlay_series_description: "Processed DicomRT with Overlay"
   overlay_study_id: "RTPlanShare"
   

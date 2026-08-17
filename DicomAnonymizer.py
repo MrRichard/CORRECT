@@ -1,4 +1,3 @@
-import hashlib
 import logging
 import pydicom
 import tempfile
@@ -101,47 +100,3 @@ class DicomAnonymizer:
             if 'temp_path' in locals() and os.path.exists(temp_path):
                 os.remove(temp_path)
             raise
-    
-    def _generate_patient_id(self):
-        """Generate a random patient ID for full anonymization"""
-        import uuid
-        # Generate a short unique identifier (8 characters)
-        return str(uuid.uuid4()).replace('-', '')[:8]
-
-    def _handle_date(self, date_str):
-        """Modify date while preserving year/month"""
-        if not date_str:
-            return ''
-        try:
-            # Keep year and month, set day to 01
-            return date_str[:6] + '01'
-        except:
-            return ''
-
-    def _handle_time(self, time_str):
-        """Modify time while preserving hour"""
-        if not time_str:
-            return ''
-        try:
-            # Keep hour, zero out minutes and seconds
-            return time_str[:2] + '0000.000'
-        except:
-            return ''
-
-    def _generate_uid(self, original_uid):
-        """
-        Generate a new UID based on the original one to maintain consistency
-        while ensuring uniqueness
-        """
-        # Create a hash of the original UID
-        hash_obj = hashlib.sha256(original_uid.encode())
-        hashed = hash_obj.hexdigest()
-        
-        # Ensure the new UID is valid according to DICOM standards
-        # Use a prefix that indicates this is an anonymized UID
-        prefix = "2.25." # Registered prefix for locally generated UIDs
-        
-        # Convert hash to a number sequence and truncate to ensure valid length
-        numeric_hash = int(hashed[:16], 16)
-        
-        return f"{prefix}{numeric_hash}"
