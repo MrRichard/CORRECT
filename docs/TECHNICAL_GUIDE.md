@@ -52,3 +52,19 @@ CORRECT is an event-driven DICOM service built around the `netrt_core` package.
 - **Logs**: Monitor `application.log` (system) and `transaction.log` (audit).
 - **Quarantine**: Studies that fail processing are moved to the `quarantine` subdirectory for manual review.
 - **Storage**: Monitor disk usage in the `working` directory.
+
+## Known Dependency Workarounds
+- **rt-utils `<= 1.2.7`**: The published package omits `import warnings` in
+  `rt_utils/rtstruct_builder.py`, so its `warn_only` path raises
+  `NameError: name 'warnings' is not defined` instead of warning. Upstream fixed
+  this (`qurit/rt-utils` commit `b70ad40b`) but never released it.
+  `netrt_core/rt_utils_compat.py` injects the stdlib `warnings` module at import
+  time to restore the intended behaviour. Remove the shim once a fixed
+  rt-utils release is pinned.
+
+## Testing
+```bash
+pip install -r requirements-dev.txt
+python -m pytest tests/ -v
+```
+
