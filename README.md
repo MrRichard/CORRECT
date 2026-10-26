@@ -89,9 +89,51 @@ See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for complete configuration re
 - [docs/DISCLAIMER.md](docs/DISCLAIMER.md): Security evaluation and risk disclosure.
 - [docs/LICENSE](docs/LICENSE): MIT License.
 
+## Local Run (Python 3.11)
+
+### Prerequisites
+
+- Python 3.11 installed (virtualenv recommended)
+- Network access to source and destination DICOM systems
+
+### Setup
+
+1. **Clone and Configure**
+
+   ```bash
+   git clone https://github.com/MrRichard/CORRECT
+   cd CORRECT
+   python3.11 -m venv .venv
+   source .venv/bin/activate
+   pip install -r requirements.txt
+   pip install -e .
+   ```
+
+2. **Edit Configuration**
+
+   Modify `config.yaml` as shown in the Docker section above.
+
+3. **Create Data Directories**
+
+   ```bash
+   mkdir -p /DATA/netrt_data/{working,logs}
+   ```
+
+4. **Run**
+
+   ```bash
+   python -m netrt_core.main --config config.yaml
+   ```
+
+   Or, if installed as a script:
+
+   ```bash
+   correct --config config.yaml
+   ```
+
 ## Requirements
 
-- Python 3.8+
+- Python 3.11+ for local runs; Docker image pins its own runtime
 - DICOM network connectivity
 - Sufficient disk space for temporary study storage
 
