@@ -472,17 +472,19 @@ class FileSystemManager:
             # Attach the file meta to the dataset
             dataset.file_meta = ds_file_meta
             
-            # Set appropriate VR and endianness based on transfer syntax
-            if not hasattr(dataset, 'is_implicit_VR') or not hasattr(dataset, 'is_little_endian'):
-                if ds_file_meta.TransferSyntaxUID.is_implicit_VR:
-                    dataset.is_implicit_VR = True
-                    dataset.is_little_endian = True  # Implicit VR is always Little Endian
-                else:  # Explicit VR
-                    dataset.is_implicit_VR = False
-                    dataset.is_little_endian = ds_file_meta.TransferSyntaxUID.is_little_endian
+            # Derive endianness/VR from the transfer syntax UID itself so we never
+            # touch the deprecated Dataset.is_implicit_VR / is_little_endian attrs.
+            ts = ds_file_meta.TransferSyntaxUID
+            little_endian = bool(getattr(ts, "is_little_endian", True))
+            implicit_vr = bool(getattr(ts, "is_implicit_VR", False))
 
             # Save the dataset with proper DICOM format
-            dataset.save_as(filepath, enforce_file_format=True)
+            dataset.save_as(
+                filepath,
+                enforce_file_format=True,
+                little_endian=little_endian,
+                implicit_vr=implicit_vr,
+            )
             logger.info(f"Saved DICOM file: {filepath} with TS: {ds_file_meta.TransferSyntaxUID}")
             return filepath
         except Exception as e:

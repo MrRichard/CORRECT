@@ -94,7 +94,7 @@ class DicomListener:
             )
 
             if file_path:
-                logger.info(f"Stored DICOM file: {file_path} from {event.assoc.requestor.address}")
+                logger.debug(f"Stored DICOM file: {file_path} from {event.assoc.requestor.address}")
             else:
                 logger.error("Failed to save DICOM file.")
                 return 0xA700  # Or another appropriate error status

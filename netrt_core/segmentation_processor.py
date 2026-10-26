@@ -198,6 +198,11 @@ class SegmentationProcessor:
                     logger.info(f"Created SEG for ROI '{roi_name}': {output_path}")
 
                 except Exception as e:
+                    if "ContourSequence" in str(e):
+                        logger.warning(
+                            f"ROI '{roi_name}' has no ContourSequence in RTSTRUCT; skipping SE generation."
+                        )
+                        continue
                     logger.error(f"Failed to create SEG for ROI '{roi_name}': {e}", exc_info=True)
                     continue
 
