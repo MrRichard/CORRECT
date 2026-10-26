@@ -174,6 +174,11 @@ processing:
   ignore_contour_names_containing:
     - skull
 
+  # Only contours whose names contain one of these (case-insensitive) are drawn
+  # on the overlay plane (merged) and the SC images. A study with no match fails.
+  target_contour_names_containing:
+    - GTV
+
   # Burn-in disclaimer added to pixel data of all output overlay images.
   add_burn_in_disclaimer: true
   burn_in_text: "FOR RESEARCH USE ONLY - NOT FOR CLINICAL USE"

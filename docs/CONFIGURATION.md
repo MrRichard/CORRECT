@@ -54,6 +54,9 @@ Use `features` as the on/off checklist. Keep detailed series numbers, labels, an
 processing:
   # Contour filtering
   ignore_contour_names_containing: ["skull"]
+  # Only contours whose names contain one of these (case-insensitive) are drawn on
+  # the overlay plane (merged) and the SC images. A study with no match fails.
+  target_contour_names_containing: ["GTV"]
   
   # Overlay series settings
   overlay_series_number: 98
@@ -162,6 +165,9 @@ dicom_destination:
 
 processing:
   ignore_contour_names_containing: ["skull"]
+  # Only contours whose names contain one of these (case-insensitive) are drawn on
+  # the overlay plane (merged) and the SC images. A study with no match fails.
+  target_contour_names_containing: ["GTV"]
   overlay_series_number: 999
   overlay_series_description: "RESEARCH ONLY: Treatment Plan CT w Mask"
   add_burn_in_disclaimer: true

@@ -25,6 +25,9 @@ watcher:
 
 processing:
   ignore_contour_names_containing: ["skull"]
+  # Only contours whose names contain one of these (case-insensitive) are drawn on
+  # the overlay plane (merged) and the SC images. A study with no match fails.
+  target_contour_names_containing: ["GTV"]
 
   overlay_series_number: 999
   overlay_series_description: "RESEARCH ONLY: Unapproved Treatment Plan CT w Mask"

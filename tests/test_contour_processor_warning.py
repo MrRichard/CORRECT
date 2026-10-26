@@ -110,7 +110,7 @@ def _make_rtstruct(path, referenced_sop_instance_uids):
     # --- StructureSetROISequence ---
     structure_roi = Dataset()
     structure_roi.ROINumber = 1
-    structure_roi.ROIName = "BODY"
+    structure_roi.ROIName = "GTV"
     structure_roi.ROIGenerationAlgorithm = "MANUAL"
     ds.StructureSetROISequence = [structure_roi]
 
