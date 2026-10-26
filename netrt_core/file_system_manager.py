@@ -467,7 +467,7 @@ class FileSystemManager:
 
             # Set implementation identifiers
             ds_file_meta.ImplementationClassUID = pydicom.uid.PYDICOM_IMPLEMENTATION_UID
-            ds_file_meta.ImplementationVersionName = "NETRT_CORE_WD_0.1"
+            ds_file_meta.ImplementationVersionName = "CORRECT_WD_0.1"
 
             # Attach the file meta to the dataset
             dataset.file_meta = ds_file_meta

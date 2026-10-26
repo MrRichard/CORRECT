@@ -261,24 +261,32 @@ class ContourProcessor:
 
     def _get_target_rois(self, rt_struct):
         """
-        Returns the target (GTV) ROI names to render: non-ignored ROIs whose name
-        contains one of the configured target terms. Raises if none are found.
+        Returns target ROI names to render. Prefers configured target terms (default GTV);
+        if none match, falls back to CTV and then PTV, logging a WARNING each time.
+        Raises ValueError if no target (GTV/CTV/PTV) contours are found at all.
         """
         all_rois = rt_struct.get_roi_names()
         ignore_terms = self.processing_config.get("ignore_contour_names_containing", ["skull"])
         target_terms = self.processing_config.get("target_contour_names_containing", ["GTV"])
-        rois_to_process = [r for r in all_rois if not any(term.lower() in r.lower() for term in ignore_terms)]
-        rois_to_process = [r for r in rois_to_process if any(term.lower() in r.lower() for term in target_terms)]
 
-        logger.info(f"Original ROIs found: {all_rois}")
-        logger.info(f"Ignoring contours containing: {ignore_terms}")
-        logger.info(f"Selecting target contours containing: {target_terms}")
-        logger.info(f"Target ROIs selected: {rois_to_process}")
+        base_rois = [r for r in all_rois if not any(term.lower() in r.lower() for term in ignore_terms)]
 
-        if not rois_to_process:
-            raise ValueError(f"No GTV contours found in RTSTRUCT (target terms {target_terms}, ROIs {all_rois}).")
+        for terms in [target_terms, ["CTV"], ["PTV"]]:
+            rois_to_process = [r for r in base_rois if any(t.lower() in r.lower() for t in terms)]
+            if rois_to_process:
+                if terms is not target_terms:
+                    logger.warning(
+                        f"No GTV contours found (terms {target_terms}); falling back to "
+                        f"{terms} contours: {rois_to_process}"
+                    )
+                logger.info(f"Original ROIs found: {all_rois}")
+                logger.info(f"Ignoring contours containing: {ignore_terms}")
+                logger.info(f"Selecting target contours containing: {terms}")
+                logger.info(f"Target ROIs selected: {rois_to_process}")
+                return rois_to_process
 
-        return rois_to_process
+        logger.error(f"No GTV/CTV/PTV contours found (ROIs {all_rois}).")
+        raise ValueError(f"No target contours found in RTSTRUCT (ROIs {all_rois}).")
 
     def _get_individual_contours(self, rt_struct):
         """Returns a list of individual target contour masks for multi-color visualization."""
