@@ -268,25 +268,23 @@ class ContourProcessor:
         all_rois = rt_struct.get_roi_names()
         ignore_terms = self.processing_config.get("ignore_contour_names_containing", ["skull"])
         target_terms = self.processing_config.get("target_contour_names_containing", ["GTV"])
+        if isinstance(target_terms, str):
+            target_terms = [target_terms]
 
-        base_rois = [r for r in all_rois if not any(term.lower() in r.lower() for term in ignore_terms)]
+        rois_to_process = [r for r in all_rois if not any(term.lower() in r.lower() for term in ignore_terms)]
+        rois_to_process = [r for r in rois_to_process if any(term.lower() in r.lower() for term in target_terms)]
 
-        for terms in [target_terms, ["CTV"], ["PTV"]]:
-            rois_to_process = [r for r in base_rois if any(t.lower() in r.lower() for t in terms)]
-            if rois_to_process:
-                if terms is not target_terms:
-                    logger.warning(
-                        f"No GTV contours found (terms {target_terms}); falling back to "
-                        f"{terms} contours: {rois_to_process}"
-                    )
-                logger.info(f"Original ROIs found: {all_rois}")
-                logger.info(f"Ignoring contours containing: {ignore_terms}")
-                logger.info(f"Selecting target contours containing: {terms}")
-                logger.info(f"Target ROIs selected: {rois_to_process}")
-                return rois_to_process
+        logger.info(f"Original ROIs found: {all_rois}")
+        logger.info(f"Ignoring contours containing: {ignore_terms}")
+        logger.info(f"Selecting target contours containing: {target_terms}")
+        logger.info(f"Target ROIs selected: {rois_to_process}")
 
-        logger.error(f"No GTV/CTV/PTV contours found (ROIs {all_rois}).")
-        raise ValueError(f"No target contours found in RTSTRUCT (ROIs {all_rois}).")
+        if not rois_to_process:
+            raise ValueError(
+                f"No target contours found in RTSTRUCT (target terms {target_terms}, ROIs {all_rois})."
+            )
+
+        return rois_to_process
 
     def _get_individual_contours(self, rt_struct):
         """Returns a list of individual target contour masks for multi-color visualization."""

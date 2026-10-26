@@ -68,7 +68,8 @@ All settings are managed through `config.yaml`. Key parameters include:
 
 - **Network Settings**: DICOM listener and destination configuration
 - **Processing Options**: Contour filtering rules, series descriptions
-- **Anonymization**: Two independent controls — `apply_site_code` for patient ID replacement and `apply_anonymization_rules` for tag removal/blanking
+- **Target Contour Names** (optional `target_contour_names_containing`) defaults to `GTV`; override with a string or list of patterns. Missing target contours cause processing to fail and the study to be quarantined.
+- **Quarantine Cleanup**: stale quarantine directories are cleared automatically on application startup.
 - **Directories**: Working and log file locations
 
 See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for complete configuration reference.

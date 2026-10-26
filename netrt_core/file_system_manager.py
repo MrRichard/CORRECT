@@ -299,7 +299,18 @@ class FileSystemManager:
         os.makedirs(self.working_dir, exist_ok=True)
         os.makedirs(self.quarantine_dir, exist_ok=True)
         os.makedirs(self.logs_dir, exist_ok=True)
-        logger.info(f"FileSystemManager initialized. Working: {self.working_dir}, Quarantine: {self.quarantine_dir}, Logs: {self.logs_dir}")
+        # Clean up any stale quarantined study directories from previous runs on startup
+        try:
+            if os.path.isdir(self.quarantine_dir):
+                for name in os.listdir(self.quarantine_dir):
+                    path = os.path.join(self.quarantine_dir, name)
+                    if os.path.isdir(path) and not os.path.islink(path):
+                        shutil.rmtree(path)
+                    elif os.path.isfile(path) or os.path.islink(path):
+                        os.remove(path)
+            logger.info("Quarantine directory cleared on startup.")
+        except Exception as e:
+            logger.warning(f"Failed to clear quarantine directory on startup: {e}")
         
         self.study_processor_callback = study_processor_callback
         self.observer = None
