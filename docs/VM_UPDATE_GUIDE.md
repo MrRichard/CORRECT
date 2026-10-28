@@ -1,8 +1,12 @@
 # VM Update Guide (Local CORRECT Installations)
 
-All CORRECT VMs run this software locally. Use this procedure when pulling an updated `main` branch so local configuration is not overwritten.
+All CORRECT VMs run this software locally. Use this procedure when pulling an updated `master` branch so local configuration is not overwritten.
 
 ## Quick, safe update
+
+> The easiest path is the bundled updater: `sudo /opt/correct/app/src/install/update-vm.sh`
+> (self-contained; safe to copy onto any CORRECT VM). The manual steps below are for when
+> you need to drive `git` by hand.
 
 1. Back up your local configuration files:
    ```bash
@@ -18,8 +22,8 @@ All CORRECT VMs run this software locally. Use this procedure when pulling an up
 3. Pull the latest code:
    ```bash
    git fetch origin
-   git checkout main
-   git pull --ff-only origin main
+   git checkout master
+   git pull --ff-only origin master
    ```
 
 4. Restore only your config files (do not restore code changes):
@@ -37,7 +41,7 @@ All CORRECT VMs run this software locally. Use this procedure when pulling an up
 
 6. Restart the service:
    ```bash
-   python -m netrt_core.main --config config.yaml
+   sudo systemctl restart correct
    ```
 
 ## Notes

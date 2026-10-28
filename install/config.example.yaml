@@ -1,0 +1,96 @@
+# config.example.yaml — CORRECT runtime configuration template
+#
+# Copied to /opt/correct/app/config.yaml by install.sh on first install.
+# Edit every YOUR_* / SITE value below before going live.
+
+dicom_listener:
+  host: 0.0.0.0
+  port: 11112
+  ae_title: CORRECT
+  config_negotiated_transfer_syntax: true
+
+dicom_destination:
+  ip: YOUR_PACS_IP          # e.g. 192.168.1.50
+  port: 104                 # standard DICOM port
+  ae_title: YOUR_PACS_AET   # AE title of the destination PACS/VNA
+
+directories:
+  working: /opt/correct/working
+  logs: /opt/correct/logs
+  quarantine_subdir: quarantine
+
+logging:
+  level: INFO
+  format: "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+  application_log_file: application.log
+  transaction_log_file: transaction.log
+  transaction_log_format: "%(asctime)s TXN [%(levelname)s]: %(message)s"
+
+features:
+  send_original_series: true
+  create_augmented_series: true
+  create_gsps: true
+  create_segmentation_export: true
+  create_secondary_capture: true
+  generate_jpg_visualizations: true
+
+watcher:
+  debounce_interval_seconds: 60
+  min_file_count_for_processing: 10
+
+processing:
+  ignore_contour_names_containing: ["skull"]
+  # Only contours whose names contain one of these (case-insensitive) are drawn.
+  # A study with no match fails and is quarantined. Defaults to GTV.
+  target_contour_names_containing: ["GTV"]
+
+  overlay_series_number: 999
+  overlay_series_description: "RESEARCH ONLY: Unapproved Treatment Plan CT w Mask"
+  overlay_study_id: "RTPlanShare"
+
+  gsps_series_number: 100
+  gsps_overlay_color_cielab: [34895, 53534, 50196]
+
+  add_burn_in_disclaimer: true
+  burn_in_text: "FOR RESEARCH USE ONLY - NOT FOR CLINICAL USE"
+
+  segmentation_series_number: 200
+  segmentation_series_description_template: "RESEARCH USE ONLY: CONTOUR {}"
+  segmentation_algorithm_name: "Radiation Oncologist"
+  segmentation_algorithm_version: "v1.0"
+  segmentation_tracking_id: "FOR RESEARCH USE ONLY"
+
+  sc_series_number: 300
+  sc_series_description: "SC: Contour Overlay Visualization"
+
+anonymization:
+  apply_site_code: true
+  apply_anonymization_rules: true
+  site_code: SITE           # your institution code, e.g. WFU
+  pid_mapping_file: /mnt/shared/pid_mapping.json
+  study_description: "CORRECT Study Treatment Plan"
+  rules:
+    remove_tags:
+      - AccessionNumber
+      - ReferringPhysicianName
+      - OtherPatientIDs
+      - PatientBirthDate
+      - PatientWeight
+      - PatientAge
+      - PatientAddress
+      - PatientTelephoneNumbers
+      - OtherPatientNames
+      - PatientMotherBirthName
+      - ReferringPhysicianAddress
+      - ReferringPhysicianTelephoneNumbers
+      - PhysiciansOfRecord
+      - OperatorsName
+      - InstitutionName
+      - InstitutionAddress
+      - PerformingPhysicianName
+      - RequestingPhysician
+    blank_tags: []
+    generate_random_id_prefix: ""
+
+reporting:
+  output_directory: /mnt/shared
