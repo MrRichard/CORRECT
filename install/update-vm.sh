@@ -75,14 +75,14 @@ runb "cp -p '${CONFIG}' '${CONFIG}.bak-${STAMP}'"
 runb "ls -1 '${CONFIG}.bak-'* 2>/dev/null | tail -n 5" || true
 
 echo "==> [3/6] pulling latest code (branch: ${BRANCH})"
-runb "sudo -u ${USER_NAME} git -C '${SRC}' fetch --quiet origin"
-runb "sudo -u ${USER_NAME} git -C '${SRC}' checkout '${BRANCH}'"
-runb "sudo -u ${USER_NAME} git -C '${SRC}' pull --ff-only origin '${BRANCH}'"
+runb "runuser -u ${USER_NAME} -- git -C '${SRC}' fetch --quiet origin"
+runb "runuser -u ${USER_NAME} -- git -C '${SRC}' checkout '${BRANCH}'"
+runb "runuser -u ${USER_NAME} -- git -C '${SRC}' pull --ff-only origin '${BRANCH}'"
 
 echo "==> [4/6] refreshing dependencies (requirements.txt + editable install)"
-runb "sudo -u ${USER_NAME} '${VENV}/bin/pip' install --upgrade pip"
-runb "sudo -u ${USER_NAME} '${VENV}/bin/pip' install -r '${SRC}/requirements.txt'"
-runb "sudo -u ${USER_NAME} '${VENV}/bin/pip' install -e '${SRC}'"
+runb "runuser -u ${USER_NAME} -- '${VENV}/bin/pip' install --upgrade pip"
+runb "runuser -u ${USER_NAME} -- '${VENV}/bin/pip' install -r '${SRC}/requirements.txt'"
+runb "runuser -u ${USER_NAME} -- '${VENV}/bin/pip' install -e '${SRC}'"
 
 echo "==> [5/6] verifying ufw allows the DICOM listener port"
 PORT="$(grep -A3 '^dicom_listener:' "$CONFIG" 2>/dev/null | grep 'port:' | head -1 | sed 's/.*: *//; s/#.*//; s/ *$//' || true)"
@@ -108,7 +108,7 @@ if [ "$DRY_RUN" = "0" ]; then
   ufw status 2>/dev/null || true
   echo
   echo "--- new HEAD ---"
-  sudo -u "$USER_NAME" git -C "$SRC" log --oneline -1
+  runuser -u "$USER_NAME" -- git -C "$SRC" log --oneline -1
   echo
   echo "--- recent logs ---"
   journalctl -u correct --no-pager -n 15 || true

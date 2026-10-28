@@ -7,8 +7,8 @@
 # using the same on-disk layout as the OVA appliances so that update.sh /
 # update-vm.sh work on both bare-metal and VM deployments:
 #
-#   /opt/correct/app/src      git clone of the CORRECT repo
-#   /opt/correct/app/venv     Python 3.11 virtualenv
+#   /opt/correct/app/src      CORRECT source (git clone or --source copy)
+#   /opt/correct/app/venv     Python virtualenv
 #   /opt/correct/app/config.yaml   runtime config (outside src/ — survives pulls)
 #   /opt/correct/working      in-progress study storage + quarantine
 #   /opt/correct/logs         application + transaction logs
@@ -16,8 +16,9 @@
 #   /etc/systemd/system/correct.service
 #
 # Usage:
-#   sudo ./install.sh                         # defaults: master, port 11112
+#   sudo ./install.sh                         # defaults: clone master, port 11112
 #   sudo ./install.sh --branch main           # deploy a specific branch
+#   sudo ./install.sh --source /home/me/CORRECT  # copy a local working copy into src/
 #   sudo ./install.sh --config /path/cfg.yaml # install a pre-made config
 #   sudo ./install.sh --dry-run               # print every step, change nothing
 #   sudo ./install.sh --help
@@ -31,6 +32,7 @@ PORT="11112"
 USER_NAME="correct"
 GROUP_NAME="correct"
 CUSTOM_CONFIG=""
+SOURCE=""
 DRY_RUN=0
 
 # ── helpers ─────────────────────────────────────────────────────────────────
@@ -43,8 +45,10 @@ usage() {
   cat <<EOF
 
 Options:
-  --branch NAME      git branch/tag to deploy (default: master)
+  --branch NAME      git branch/tag to deploy (default: master; ignored with --source)
   --repo URL         git repository URL (default: $REPO)
+  --source PATH      copy a local source dir into src/ instead of cloning (root reads it,
+                     so the 'correct' user never needs access to your home dir)
   --config PATH      copy this file to config.yaml instead of the template
   --port N           DICOM listener port + firewall rule (default: 11112)
   --user NAME        service account name (default: correct)
@@ -59,6 +63,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --branch) BRANCH="$2"; shift 2;;
     --repo)   REPO="$2"; shift 2;;
+    --source) SOURCE="$2"; shift 2;;
     --config) CUSTOM_CONFIG="$2"; shift 2;;
     --port)   PORT="$2"; shift 2;;
     --user)   USER_NAME="$2"; GROUP_NAME="$2"; shift 2;;
@@ -95,14 +100,14 @@ case "${ID:-}" in
 esac
 echo "Detected: ${PRETTY_NAME:-$ID}  (family=$FAMILY)"
 
-# ── 1. system packages + Python 3.11 ────────────────────────────────────────
-echo "==> [1/9] installing system packages and Python 3.11"
+# ── 1. system packages + Python ─────────────────────────────────────────────
+echo "==> [1/9] installing system packages and Python"
 PYBIN=""
 if [ "$FAMILY" = "debian" ]; then
   runb "apt-get update -qq"
   runb "apt-get install -y git ca-certificates"
   # Prefer python3.11; fall back to the distro default if 3.11 isn't packaged
-  # (e.g. Debian Trixie ships 3.13 as default — the pinned stack also works on 3.12/3.13).
+  # (e.g. Debian Trixie ships 3.13 as default — the pinned stack works on 3.11-3.13).
   if runb "apt-get install -y python3.11 python3.11-venv python3.11-pip 2>/dev/null"; then
     PYBIN="python3.11"
   else
@@ -112,12 +117,14 @@ if [ "$FAMILY" = "debian" ]; then
   fi
 else  # rhel family
   runb "dnf install -y git"
+  runb "dnf install -y python3.11"
   if [ "${SUB:-}" = "fedora" ]; then
-    runb "dnf install -y python3.11 python3.11-pip"
+    # Fedora has no python3.11-pip; use python3-pip (venv gets pip via ensurepip).
+    runb "dnf install -y python3-pip 2>/dev/null || true"
   else
     # RHEL/Rocky 9+ ship python3.11 via an AppStream module (or as a package on EL10).
     runb "dnf module enable -y python3.11 2>/dev/null || true"
-    runb "dnf install -y python3.11 python3.11-pip"
+    runb "dnf install -y python3.11-pip 2>/dev/null || dnf install -y python3-pip 2>/dev/null || true"
   fi
   PYBIN="python3.11"
 fi
@@ -143,25 +150,44 @@ for d in "$APP" "$WORKING" "$LOGS" "$SHARED"; do
 done
 runb "chown -R ${USER_NAME}:${GROUP_NAME} '${APP}' '${WORKING}' '${LOGS}' '${SHARED}'"
 
-# ── 4. clone source ─────────────────────────────────────────────────────────
-echo "==> [4/9] cloning CORRECT (${BRANCH}) -> ${SRC}"
-if [ -d "${SRC}/.git" ]; then
-  echo "   ${SRC} already cloned — running update instead of re-cloning."
-  runb "sudo -u ${USER_NAME} git -C '${SRC}' fetch --quiet origin"
-  runb "sudo -u ${USER_NAME} git -C '${SRC}' checkout '${BRANCH}'"
-  runb "sudo -u ${USER_NAME} git -C '${SRC}' pull --ff-only origin '${BRANCH}'"
+# ── 4. deploy source ────────────────────────────────────────────────────────
+if [ -n "$SOURCE" ]; then
+  echo "==> [4/9] copying local source ${SOURCE} -> ${SRC}"
+  [ -d "$SOURCE" ] || die "source directory not found: $SOURCE"
+  run mkdir -p "$SRC"
+  run cp -a "$SOURCE/." "$SRC/"
+  runb "chown -R ${USER_NAME}:${GROUP_NAME} '${SRC}'"
+  echo "   copied. (update.sh can still pull from origin later if this is a git repo.)"
 else
-  runb "sudo -u ${USER_NAME} git clone --branch '${BRANCH}' '${REPO}' '${SRC}'"
+  echo "==> [4/9] cloning CORRECT (${BRANCH}) -> ${SRC}"
+  if [ -d "${SRC}/.git" ]; then
+    echo "   ${SRC} already cloned — updating."
+    runb "runuser -u ${USER_NAME} -- git -C '${SRC}' fetch --quiet origin"
+    runb "runuser -u ${USER_NAME} -- git -C '${SRC}' checkout '${BRANCH}'"
+    runb "runuser -u ${USER_NAME} -- git -C '${SRC}' pull --ff-only origin '${BRANCH}'"
+  else
+    runb "runuser -u ${USER_NAME} -- git clone --branch '${BRANCH}' '${REPO}' '${SRC}'"
+  fi
 fi
 
 # ── 5. venv + dependencies ─────────────────────────────────────────────────
 echo "==> [5/9] creating virtualenv and installing dependencies"
 if [ ! -x "${VENV}/bin/python" ]; then
-  runb "sudo -u ${USER_NAME} ${PYBIN} -m venv '${VENV}'"
+  runb "runuser -u ${USER_NAME} -- ${PYBIN} -m venv '${VENV}'"
 fi
-runb "sudo -u ${USER_NAME} '${VENV}/bin/pip' install --upgrade pip"
-runb "sudo -u ${USER_NAME} '${VENV}/bin/pip' install -r '${SRC}/requirements.txt'"
-runb "sudo -u ${USER_NAME} '${VENV}/bin/pip' install -e '${SRC}'"
+# Ensure pip is present in the venv (some distros ship venv without pip / strip ensurepip).
+if [ "$DRY_RUN" = "0" ] && ! runuser -u "${USER_NAME}" -- "${VENV}/bin/pip" --version >/dev/null 2>&1; then
+  echo "   venv has no pip — bootstrapping (ensurepip, then get-pip.py fallback)."
+  runuser -u "${USER_NAME}" -- "${VENV}/bin/python" -m ensurepip --upgrade 2>/dev/null || {
+    GETPIP="$(mktemp /tmp/correct-getpip.XXXXXX.py)"
+    curl -fsSL https://bootstrap.pypa.io/get-pip.py -o "$GETPIP"
+    runuser -u "${USER_NAME}" -- "${VENV}/bin/python" "$GETPIP"
+    rm -f "$GETPIP"
+  }
+fi
+runb "runuser -u ${USER_NAME} -- '${VENV}/bin/pip' install --upgrade pip"
+runb "runuser -u ${USER_NAME} -- '${VENV}/bin/pip' install -r '${SRC}/requirements.txt'"
+runb "runuser -u ${USER_NAME} -- '${VENV}/bin/pip' install -e '${SRC}'"
 
 # ── 6. configuration ────────────────────────────────────────────────────────
 echo "==> [6/9] installing config"

@@ -58,14 +58,14 @@ echo "==> [1/4] stopping 'correct' service"
 run systemctl stop correct 2>/dev/null || true
 
 echo "==> [2/4] pulling latest code (branch: ${BRANCH})"
-runb "sudo -u ${USER_NAME} git -C '${SRC}' fetch --quiet origin"
-runb "sudo -u ${USER_NAME} git -C '${SRC}' checkout '${BRANCH}'"
-runb "sudo -u ${USER_NAME} git -C '${SRC}' pull --ff-only origin '${BRANCH}'"
+runb "runuser -u ${USER_NAME} -- git -C '${SRC}' fetch --quiet origin"
+runb "runuser -u ${USER_NAME} -- git -C '${SRC}' checkout '${BRANCH}'"
+runb "runuser -u ${USER_NAME} -- git -C '${SRC}' pull --ff-only origin '${BRANCH}'"
 
 echo "==> [3/4] refreshing dependencies"
-runb "sudo -u ${USER_NAME} '${VENV}/bin/pip' install --upgrade pip"
-runb "sudo -u ${USER_NAME} '${VENV}/bin/pip' install -r '${SRC}/requirements.txt'"
-runb "sudo -u ${USER_NAME} '${VENV}/bin/pip' install -e '${SRC}'"
+runb "runuser -u ${USER_NAME} -- '${VENV}/bin/pip' install --upgrade pip"
+runb "runuser -u ${USER_NAME} -- '${VENV}/bin/pip' install -r '${SRC}/requirements.txt'"
+runb "runuser -u ${USER_NAME} -- '${VENV}/bin/pip' install -e '${SRC}'"
 echo "   (config at ${CONFIG} preserved — outside source tree)"
 
 if [ "$RESTART" = "1" ]; then
@@ -76,7 +76,7 @@ if [ "$RESTART" = "1" ]; then
     systemctl --no-pager --lines=15 status correct || true
     echo
     echo "--- new HEAD ---"
-    sudo -u "$USER_NAME" git -C "$SRC" log --oneline -1
+    runuser -u "$USER_NAME" -- git -C "$SRC" log --oneline -1
   fi
 else
   echo "==> [4/4] --no-restart given; service is stopped. Start with: systemctl start correct"
