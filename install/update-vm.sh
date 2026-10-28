@@ -80,7 +80,10 @@ runb "runuser -u ${USER_NAME} -- git -C '${SRC}' checkout '${BRANCH}'"
 runb "runuser -u ${USER_NAME} -- git -C '${SRC}' pull --ff-only origin '${BRANCH}'"
 
 echo "==> [4/6] refreshing dependencies (requirements.txt + editable install)"
-runb "runuser -u ${USER_NAME} -- '${VENV}/bin/pip' install --upgrade pip"
+# OVA-built venvs are root-owned (Ansible provisioned as root), which blocks pip
+# writes as the service user. Normalize ownership; no-op on fresh installs.
+runb "chown -R ${USER_NAME}:${GROUP_NAME} '${VENV}' '${SRC}'"
+runb "runuser -u ${USER_NAME} -- '${VENV}/bin/pip' install --upgrade pip 2>/dev/null || echo \"   (pip upgrade skipped — using existing)\""
 runb "runuser -u ${USER_NAME} -- '${VENV}/bin/pip' install -r '${SRC}/requirements.txt'"
 runb "runuser -u ${USER_NAME} -- '${VENV}/bin/pip' install -e '${SRC}'"
 
