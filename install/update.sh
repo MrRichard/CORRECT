@@ -64,7 +64,7 @@ runb "runuser -u ${USER_NAME} -- git -C '${SRC}' pull --ff-only origin '${BRANCH
 
 echo "==> [3/4] refreshing dependencies"
 # Normalize venv ownership (OVA-built venvs are root-owned; no-op on fresh installs).
-runb "chown -R ${USER_NAME}:${GROUP_NAME} '${VENV}' '${SRC}'"
+runb "chown -R ${USER_NAME}:${USER_NAME} '${VENV}' '${SRC}'"
 runb "runuser -u ${USER_NAME} -- '${VENV}/bin/pip' install --upgrade pip 2>/dev/null || echo \"   (pip upgrade skipped — using existing)\""
 runb "runuser -u ${USER_NAME} -- '${VENV}/bin/pip' install -r '${SRC}/requirements.txt'"
 runb "runuser -u ${USER_NAME} -- '${VENV}/bin/pip' install -e '${SRC}'"
