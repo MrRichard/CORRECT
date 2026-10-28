@@ -68,7 +68,8 @@ All settings are managed through `config.yaml`. Key parameters include:
 
 - **Network Settings**: DICOM listener and destination configuration
 - **Processing Options**: Contour filtering rules, series descriptions
-- **Anonymization**: Two independent controls — `apply_site_code` for patient ID replacement and `apply_anonymization_rules` for tag removal/blanking
+- **Target Contour Names** (optional `target_contour_names_containing`) defaults to `GTV`; override with a string or list of patterns. Missing target contours cause processing to fail and the study to be quarantined.
+- **Quarantine Cleanup**: stale quarantine directories are cleared automatically on application startup.
 - **Directories**: Working and log file locations
 
 See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for complete configuration reference.
@@ -89,9 +90,51 @@ See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for complete configuration re
 - [docs/DISCLAIMER.md](docs/DISCLAIMER.md): Security evaluation and risk disclosure.
 - [docs/LICENSE](docs/LICENSE): MIT License.
 
+## Local Run (Python 3.11)
+
+### Prerequisites
+
+- Python 3.11 installed (virtualenv recommended)
+- Network access to source and destination DICOM systems
+
+### Setup
+
+1. **Clone and Configure**
+
+   ```bash
+   git clone https://github.com/MrRichard/CORRECT
+   cd CORRECT
+   python3.11 -m venv .venv
+   source .venv/bin/activate
+   pip install -r requirements.txt
+   pip install -e .
+   ```
+
+2. **Edit Configuration**
+
+   Modify `config.yaml` as shown in the Docker section above.
+
+3. **Create Data Directories**
+
+   ```bash
+   mkdir -p /DATA/netrt_data/{working,logs}
+   ```
+
+4. **Run**
+
+   ```bash
+   python main.py --config config.yaml
+   ```
+
+   Or, if installed as a script:
+
+   ```bash
+   correct --config config.yaml
+   ```
+
 ## Requirements
 
-- Python 3.8+
+- Python 3.11+ for local runs; Docker image pins its own runtime
 - DICOM network connectivity
 - Sufficient disk space for temporary study storage
 

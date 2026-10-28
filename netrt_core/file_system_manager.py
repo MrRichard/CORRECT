@@ -299,7 +299,18 @@ class FileSystemManager:
         os.makedirs(self.working_dir, exist_ok=True)
         os.makedirs(self.quarantine_dir, exist_ok=True)
         os.makedirs(self.logs_dir, exist_ok=True)
-        logger.info(f"FileSystemManager initialized. Working: {self.working_dir}, Quarantine: {self.quarantine_dir}, Logs: {self.logs_dir}")
+        # Clean up any stale quarantined study directories from previous runs on startup
+        try:
+            if os.path.isdir(self.quarantine_dir):
+                for name in os.listdir(self.quarantine_dir):
+                    path = os.path.join(self.quarantine_dir, name)
+                    if os.path.isdir(path) and not os.path.islink(path):
+                        shutil.rmtree(path)
+                    elif os.path.isfile(path) or os.path.islink(path):
+                        os.remove(path)
+            logger.info("Quarantine directory cleared on startup.")
+        except Exception as e:
+            logger.warning(f"Failed to clear quarantine directory on startup: {e}")
         
         self.study_processor_callback = study_processor_callback
         self.observer = None
@@ -467,22 +478,24 @@ class FileSystemManager:
 
             # Set implementation identifiers
             ds_file_meta.ImplementationClassUID = pydicom.uid.PYDICOM_IMPLEMENTATION_UID
-            ds_file_meta.ImplementationVersionName = "NETRT_CORE_WD_0.1"
+            ds_file_meta.ImplementationVersionName = "CORRECT_WD_0.1"
 
             # Attach the file meta to the dataset
             dataset.file_meta = ds_file_meta
             
-            # Set appropriate VR and endianness based on transfer syntax
-            if not hasattr(dataset, 'is_implicit_VR') or not hasattr(dataset, 'is_little_endian'):
-                if ds_file_meta.TransferSyntaxUID.is_implicit_VR:
-                    dataset.is_implicit_VR = True
-                    dataset.is_little_endian = True  # Implicit VR is always Little Endian
-                else:  # Explicit VR
-                    dataset.is_implicit_VR = False
-                    dataset.is_little_endian = ds_file_meta.TransferSyntaxUID.is_little_endian
+            # Derive endianness/VR from the transfer syntax UID itself so we never
+            # touch the deprecated Dataset.is_implicit_VR / is_little_endian attrs.
+            ts = ds_file_meta.TransferSyntaxUID
+            little_endian = bool(getattr(ts, "is_little_endian", True))
+            implicit_vr = bool(getattr(ts, "is_implicit_VR", False))
 
             # Save the dataset with proper DICOM format
-            dataset.save_as(filepath, enforce_file_format=True)
+            dataset.save_as(
+                filepath,
+                enforce_file_format=True,
+                little_endian=little_endian,
+                implicit_vr=implicit_vr,
+            )
             logger.info(f"Saved DICOM file: {filepath} with TS: {ds_file_meta.TransferSyntaxUID}")
             return filepath
         except Exception as e:

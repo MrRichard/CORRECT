@@ -30,6 +30,11 @@ def setup_logging(config):
 
     logging.basicConfig(level=log_level, format=log_format_str, handlers=[logging.StreamHandler(sys.stdout)])
 
+    # Route warnings.warn() output into the logging system so library warnings
+    # (e.g. rt-utils' RTSTRUCT series reference check) land in application.log
+    # instead of only appearing on stderr.
+    logging.captureWarnings(True)
+
     root_logger = logging.getLogger()
     root_logger.setLevel(log_level) # Ensure root logger level is set
 

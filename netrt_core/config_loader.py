@@ -69,6 +69,7 @@ DEFAULT_CONFIG = {
     },
    "processing": {
         "ignore_contour_names_containing": ["skull"],
+        "target_contour_names_containing": ["GTV"],
         "add_burn_in_disclaimer": True,
         "burn_in_text": "FOR RESEARCH USE ONLY - NOT FOR CLINICAL USE",
         "overlay_series_number": 999,

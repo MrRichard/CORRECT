@@ -105,10 +105,10 @@ class ContourProcessor:
             finally:
                 if temp_dir and os.path.exists(temp_dir):
                     shutil.rmtree(temp_dir)
-            # Get first non-SKULL contour for overlay series
-            first_contour_mask = self._create_first_contour_mask(rt_struct)
+            # Merge all target (GTV) contours into a single mask for the overlay series
+            target_mask = self._create_merged_mask(rt_struct)
             if self.features.get("create_augmented_series", True):
-                self._create_overlay_series(dcm_path, first_contour_mask, output_path)
+                self._create_overlay_series(dcm_path, target_mask, output_path)
 
             generate_jpg = self.features.get("generate_jpg_visualizations", True)
             generate_sc_dicom = self.features.get("create_secondary_capture", True)
@@ -259,11 +259,36 @@ class ContourProcessor:
         logger.error("No valid contours found to create an overlay.")
         raise ValueError("No valid contours found to create an overlay.")
 
-    def _get_individual_contours(self, rt_struct):
-        """Returns a list of individual contour masks for multi-color visualization."""
+    def _get_target_rois(self, rt_struct):
+        """
+        Returns target ROI names to render. Prefers configured target terms (default GTV);
+        if none match, falls back to CTV and then PTV, logging a WARNING each time.
+        Raises ValueError if no target (GTV/CTV/PTV) contours are found at all.
+        """
         all_rois = rt_struct.get_roi_names()
         ignore_terms = self.processing_config.get("ignore_contour_names_containing", ["skull"])
+        target_terms = self.processing_config.get("target_contour_names_containing", ["GTV"])
+        if isinstance(target_terms, str):
+            target_terms = [target_terms]
+
         rois_to_process = [r for r in all_rois if not any(term.lower() in r.lower() for term in ignore_terms)]
+        rois_to_process = [r for r in rois_to_process if any(term.lower() in r.lower() for term in target_terms)]
+
+        logger.info(f"Original ROIs found: {all_rois}")
+        logger.info(f"Ignoring contours containing: {ignore_terms}")
+        logger.info(f"Selecting target contours containing: {target_terms}")
+        logger.info(f"Target ROIs selected: {rois_to_process}")
+
+        if not rois_to_process:
+            raise ValueError(
+                f"No target contours found in RTSTRUCT (target terms {target_terms}, ROIs {all_rois})."
+            )
+
+        return rois_to_process
+
+    def _get_individual_contours(self, rt_struct):
+        """Returns a list of individual target contour masks for multi-color visualization."""
+        rois_to_process = self._get_target_rois(rt_struct)
 
         logger.info(f"Extracting {len(rois_to_process)} individual contours for debug visualization")
 
@@ -278,28 +303,20 @@ class ContourProcessor:
         return contour_list
 
     def _create_merged_mask(self, rt_struct):
-        """Merges specified ROI contours into a single binary 3D mask."""
-        all_rois = rt_struct.get_roi_names()
-        ignore_terms = self.processing_config.get("ignore_contour_names_containing", ["skull"])
-        rois_to_process = [r for r in all_rois if not any(term.lower() in r.lower() for term in ignore_terms)]
+        """Merges the target (GTV) ROI contours into a single binary 3D mask."""
+        rois_to_process = self._get_target_rois(rt_struct)
+        logger.info(f"ROIs to be merged into overlay mask: {rois_to_process}")
 
-        logger.info(f"Original ROIs found: {all_rois}")
-        logger.info(f"Ignoring contours containing: {ignore_terms}")
-        logger.info(f"ROIs to be merged into mask: {rois_to_process}")
-
-        if not rois_to_process:
-            raise ValueError("No contours left to process after filtering.")
-
-        # Initialize a blank mask with the shape of the 3D image volume
-        base_mask = rt_struct.get_roi_mask_by_name(rois_to_process[0])
-        merged_mask = np.zeros_like(base_mask, dtype=bool)
-
+        merged_mask = None
         for roi in rois_to_process:
             try:
                 mask_3d = rt_struct.get_roi_mask_by_name(roi)
-                merged_mask = np.logical_or(merged_mask, mask_3d)
+                merged_mask = mask_3d.astype(bool) if merged_mask is None else np.logical_or(merged_mask, mask_3d)
             except Exception as e:
                 logger.warning(f"Could not get mask for ROI '{roi}'. Skipping. Error: {e}")
+
+        if merged_mask is None:
+            raise ValueError(f"No valid GTV masks could be created from ROIs: {rois_to_process}")
 
         return merged_mask
 
