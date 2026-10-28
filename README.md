@@ -123,7 +123,7 @@ See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for complete configuration re
 4. **Run**
 
    ```bash
-   python -m netrt_core.main --config config.yaml
+   python main.py --config config.yaml
    ```
 
    Or, if installed as a script:

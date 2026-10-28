@@ -210,5 +210,5 @@ def test_study_without_gtv_fails(tmp_path, caplog):
         )
 
     assert (success, sc_dicom_dir) == (False, None)
-    assert "No GTV contours found" in caplog.text
+    assert "No target contours found" in caplog.text
     assert not any(f.startswith("OVERLAY-") for f in os.listdir(output_path))
