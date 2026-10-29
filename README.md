@@ -183,6 +183,28 @@ preserved automatically across updates.
 
 For deployed CORRECT virtual appliances (Debian Trixie, built via `correct-ova-build`):
 
+#### First-time bootstrap (VMs built before the `install/` scripts existed)
+
+OVA images built from the old master predate the `install/` directory, so a freshly
+deployed VM has no `update-vm.sh` on it yet. Do a one-time `git pull` to fetch the
+scripts, then run the updater. On the VM, logged in as the `correct` user (the appliance
+admin account):
+
+```bash
+git -C /opt/correct/app/src fetch origin
+git -C /opt/correct/app/src checkout master
+git -C /opt/correct/app/src pull --ff-only origin master
+sudo /opt/correct/app/src/install/update-vm.sh
+```
+
+(The `git pull` is the only step you ever run by hand — after it, the updater scripts
+live on the VM and all subsequent updates are self-contained.) If you administer the VM
+from a different account, prefix the `git` lines with `sudo -u correct`.
+
+#### Routine updates
+
+Once the scripts are present on the VM:
+
 ```bash
 sudo ./install/update-vm.sh               # self-contained; safe to copy onto a VM
 sudo ./install/update-vm.sh --branch master
