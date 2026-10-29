@@ -106,14 +106,23 @@ PYBIN=""
 if [ "$FAMILY" = "debian" ]; then
   runb "apt-get update -qq"
   runb "apt-get install -y git ca-certificates"
-  # Prefer python3.11; fall back to the distro default if 3.11 isn't packaged
-  # (e.g. Debian Trixie ships 3.13 as default — the pinned stack works on 3.11-3.13).
-  if runb "apt-get install -y python3.11 python3.11-venv python3.11-pip 2>/dev/null"; then
+  # Prefer python3.11. Note: installing python3.11 does NOT change the default 'python3'
+  # (e.g. Ubuntu 22.04 keeps python3 -> 3.10); the venv below is built with python3.11
+  # explicitly, so the system default is irrelevant — we just need the binary to exist.
+  if [ "$DRY_RUN" = "1" ]; then
+    runb "apt-get install -y python3.11 python3.11-venv python3.11-pip || true"
     PYBIN="python3.11"
   else
-    echo "WARN: python3.11 not packaged on this distro; falling back to system python3."
-    runb "apt-get install -y python3-venv python3-pip"
-    PYBIN="python3"
+    runb "apt-get install -y python3.11 python3.11-venv python3.11-pip || true"
+    if command -v python3.11 >/dev/null 2>&1; then
+      PYBIN="python3.11"
+    else
+      echo "WARN: python3.11 not available (apt install failed or package not in repos)."
+      echo "      Falling back to system python3 — the venv will use the distro default."
+      echo "      On Ubuntu <22.04, enable the 'universe' repo or the deadsnakes PPA for python3.11."
+      runb "apt-get install -y python3-venv python3-pip"
+      PYBIN="python3"
+    fi
   fi
 else  # rhel family
   runb "dnf install -y git"
@@ -181,6 +190,9 @@ if [ "$DRY_RUN" = "0" ] && ! runuser -u "${USER_NAME}" -- "${VENV}/bin/pip" --ve
   runuser -u "${USER_NAME}" -- "${VENV}/bin/python" -m ensurepip --upgrade 2>/dev/null || {
     GETPIP="$(mktemp /tmp/correct-getpip.XXXXXX.py)"
     curl -fsSL https://bootstrap.pypa.io/get-pip.py -o "$GETPIP"
+    # mktemp creates a root-owned 0600 file; make it readable by the service user
+    # before running it as them (otherwise: Permission denied on get-pip.py).
+    chown "${USER_NAME}:${USER_NAME}" "$GETPIP"; chmod 644 "$GETPIP"
     runuser -u "${USER_NAME}" -- "${VENV}/bin/python" "$GETPIP"
     rm -f "$GETPIP"
   }
