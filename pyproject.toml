@@ -15,14 +15,20 @@ dependencies = [
     "numpy",
     "watchdog",
     "PyYAML",
+    "ruamel.yaml",
+    "pywin32; sys_platform == 'win32'",
 ]
 
 [project.scripts]
 correct = "main:main"
 
+[project.gui-scripts]
+# Graphical configuration editor (runs without a console window on Windows).
+correct-config = "correct_admin.config_ui:main"
+
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["netrt_core*"]
+include = ["netrt_core*", "correct_admin*"]
 
 [tool.setuptools]
-py-modules = ["main"]
+py-modules = ["main", "DicomAnonymizer"]

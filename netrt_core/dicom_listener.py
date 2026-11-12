@@ -115,8 +115,14 @@ class DicomListener:
         # No explicit call to study_processor_callback here is needed if watchdog is primary mechanism.
         return 0x0000
 
-    def start(self):
-        """Start the DICOM listener server."""
+    def start(self, block=True):
+        """Start the DICOM listener server.
+
+        Args:
+            block (bool): If True (default) this call blocks until the server is shut
+                down. If False the server runs in a background thread and the
+                ThreadedAssociationServer is returned; call stop() to shut it down.
+        """
         handlers = [
             (evt.EVT_ACCEPTED, self._handle_association_accepted),
             (evt.EVT_C_ECHO, self._handle_echo),
@@ -128,7 +134,7 @@ class DicomListener:
 
         logger.info(f"Starting DICOM server on {self.host}:{self.port} with AE Title: {self.ae_title}")
         try:
-            self.ae.start_server((self.host, self.port), evt_handlers=handlers, block=True)
+            return self.ae.start_server((self.host, self.port), evt_handlers=handlers, block=block)
         except OSError as e:
             logger.error(f"Failed to start DICOM server on {self.host}:{self.port} - {e}. Check if port is already in use or address is valid.")
             # Potentially re-raise or handle more gracefully depending on main app structure

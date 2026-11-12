@@ -14,6 +14,7 @@ import matplotlib.patches as patches
 from matplotlib.colors import ListedColormap
 import tempfile
 import shutil
+from .fs_utils import link_or_copy
 matplotlib.use('Agg')
 
 logger = logging.getLogger(__name__)
@@ -82,7 +83,7 @@ class ContourProcessor:
         temp_dir = tempfile.mkdtemp(prefix="correct_dcm_filtered_")
         for f, group in file_groups.items():
             if group == majority_group:
-                os.symlink(os.path.join(dcm_path, f), os.path.join(temp_dir, f))
+                link_or_copy(os.path.join(dcm_path, f), os.path.join(temp_dir, f))
 
         return temp_dir, temp_dir
 
@@ -192,7 +193,7 @@ class ContourProcessor:
                     temp_fd, temp_path = tempfile.mkstemp(dir=dcm_path, prefix=".tmp-ct-")
                     ct_ds.save_as(temp_path, enforce_file_format=True)
                     os.close(temp_fd)
-                    shutil.move(temp_path, ct_path)
+                    os.replace(temp_path, ct_path)
                     files_fixed += 1
                     
             except Exception as e:
@@ -224,7 +225,7 @@ class ContourProcessor:
                 temp_fd, temp_path = tempfile.mkstemp(dir=os.path.dirname(struct_path), prefix=".tmp-rtstruct-")
                 rt_ds.save_as(temp_path, enforce_file_format=True)
                 os.close(temp_fd)
-                shutil.move(temp_path, struct_path)
+                os.replace(temp_path, struct_path)
                 logger.info(f"Successfully added missing spatial tags to RTSTRUCT")
             else:
                 logger.debug(f"RTSTRUCT already has all required spatial tags")

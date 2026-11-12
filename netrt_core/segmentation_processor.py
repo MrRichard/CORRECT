@@ -9,6 +9,8 @@ from rt_utils import RTStructBuilder
 import highdicom as hd
 from highdicom.sr.coding import CodedConcept
 
+from .fs_utils import link_or_copy
+
 logger = logging.getLogger(__name__)
 
 
@@ -78,7 +80,7 @@ class SegmentationProcessor:
 
         temp_dir = tempfile.mkdtemp(prefix="correct_seg_filtered_")
         for f in valid_files:
-            os.symlink(os.path.join(ct_dicom_dir, f), os.path.join(temp_dir, f))
+            link_or_copy(os.path.join(ct_dicom_dir, f), os.path.join(temp_dir, f))
 
         return temp_dir, temp_dir
 

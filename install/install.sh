@@ -138,6 +138,13 @@ else  # rhel family
   PYBIN="python3.11"
 fi
 [ "$DRY_RUN" = "1" ] || command -v "$PYBIN" >/dev/null 2>&1 || die "$PYBIN not found after install."
+# Tk for the optional graphical config editor (correct-config). Best effort: the
+# service itself does not need it, and hand-editing config.yaml always works.
+if [ "$FAMILY" = "debian" ]; then
+  runb "apt-get install -y ${PYBIN}-tk 2>/dev/null || apt-get install -y python3-tk 2>/dev/null || true"
+else
+  runb "dnf install -y ${PYBIN}-tkinter 2>/dev/null || dnf install -y python3-tkinter 2>/dev/null || true"
+fi
 if [ "$DRY_RUN" = "0" ]; then
   echo "   using: $PYBIN -> $(${PYBIN} --version 2>&1)"
 else
@@ -283,6 +290,7 @@ echo "==================== INSTALL COMPLETE ===================="
 echo "  Service:   systemctl status correct"
 echo "  Logs:      journalctl -u correct -f"
 echo "  Config:    ${CONFIG}   <-- EDIT if you used the template"
+echo "  Config UI: sudo ${VENV}/bin/correct-config --config ${CONFIG}   (needs a desktop or ssh -X)"
 echo "  Listener:  ss -tlnp | grep ${PORT}"
 echo "  Test:      echoscu -aet SENDER -aec CORRECT <this-host> ${PORT}"
 echo "=========================================================="

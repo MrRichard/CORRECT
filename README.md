@@ -18,11 +18,12 @@ graphical overlays, GSPS objects, and optional SEG exports.
 
 ## Installation
 
-CORRECT can be deployed three ways. **For a server, the installer script is recommended.**
+CORRECT can be deployed four ways. **For a server, use the installer for your OS.**
 
 | Method | Best for | Section |
 |---|---|---|
 | **Installer script** (`install/install.sh`) | Debian/Ubuntu or RHEL/Rocky/Fedora servers | [Installer Script](#installer-script-recommended) |
+| **Windows installer** (`install/windows/setup.cmd`) | Windows Server / Windows 10+ as a native service | [Windows Service](#windows-service) |
 | **Docker Compose** | Containerized / isolated deployments | [Docker Compose](#docker-compose) |
 | **Direct local install** (Python 3.11) | Development or manual control | [Direct Local Install](#direct-local-install-python-311) |
 
@@ -61,6 +62,27 @@ sudo systemctl status correct
 > dependency stack (numpy 2.2.2, scipy 1.15.1, opencv-python 4.11.0.86) has no 3.14 wheels.
 > The installer detects Fedora and uses the `python3.13` package automatically. See
 > [`docs/installation-fedora43.md`](docs/installation-fedora43.md) for details.
+
+### Windows Service
+
+From an elevated prompt on the server, after copying or cloning this repo:
+
+```bat
+install\windows\setup.cmd                                   :: LocalSystem, port 11112
+install\windows\setup.cmd --account virtual                 :: NT SERVICE\CORRECT (least privilege)
+install\windows\setup.cmd --account user --user CONTOSO\svc_correct
+```
+
+The installer:
+
+- installs Python 3.11 for all users if it is missing
+- installs CORRECT under `C:\Program Files\CORRECT`
+- puts config and data in `C:\ProgramData\CORRECT`
+- registers and starts the `CORRECT` service
+- adds a firewall rule
+- adds a **CORRECT Configuration** Start Menu shortcut
+
+See [`docs/installation-windows.md`](docs/installation-windows.md).
 
 ### Docker Compose
 
@@ -233,7 +255,16 @@ sudo ./install/uninstall.sh --purge --keep-config   # purge but save config.yaml
 
 ## Configuration
 
-All settings are managed through `config.yaml`. Key parameters:
+All settings are managed through `config.yaml`. You can edit it by hand, or with the graphical
+editor `correct-config`:
+
+- **Windows:** Start Menu → CORRECT → CORRECT Configuration
+- **Linux:** `sudo /opt/correct/app/venv/bin/correct-config` (needs a desktop or `ssh -X`)
+
+The editor validates input and keeps YAML comments. It can test the destination with a
+C-ECHO and start or restart the service.
+
+Key parameters:
 
 - **`dicom_listener`** — host, port, AE title for the inbound C-STORE listener
 - **`dicom_destination`** — IP, port, AE title of the PACS/VNA to forward processed studies to
@@ -260,6 +291,7 @@ See [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) for the complete reference.
 - [`docs/TECHNICAL_GUIDE.md`](docs/TECHNICAL_GUIDE.md) — technical architecture and deployment
 - [`docs/installation.md`](docs/installation.md) — RHEL/Rocky bare-metal installation guide
 - [`docs/installation-fedora43.md`](docs/installation-fedora43.md) — Fedora 43 installation guide
+- [`docs/installation-windows.md`](docs/installation-windows.md) — Windows service installation guide
 - [`docs/VM_UPDATE_GUIDE.md`](docs/VM_UPDATE_GUIDE.md) — VM update procedure (preserve local config)
 - [`docs/DISCLAIMER.md`](docs/DISCLAIMER.md) — security evaluation and risk disclosure
 - [`docs/LICENSE`](docs/LICENSE) — MIT License
