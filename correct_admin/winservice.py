@@ -1,11 +1,11 @@
 """Windows service host for CORRECT (pywin32 ServiceFramework).
 
-Registered by install/windows/install_windows.py via
-``python -m correct_admin.service_control register``. The config path is read
+Registered by the CORRECT Configuration app (Service tab -> Install service) or
+``python -m correct_admin.service_control install-service``. The config path is read
 from the service's Parameters registry key (ConfigPath).
 
 Manual debugging from an elevated prompt (runs in the console, Ctrl+C to stop):
-    "C:\\Program Files\\CORRECT\\app\\venv\\Scripts\\python.exe" -m correct_admin.winservice debug
+    "C:\\Program Files\\CORRECT\\runtime\\python.exe" -m correct_admin.winservice debug
 """
 
 import os

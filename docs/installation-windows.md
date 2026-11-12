@@ -1,142 +1,150 @@
-# Installing CORRECT on Windows (native service)
+# Installing CORRECT on Windows
 
-CORRECT runs as a native Windows service on Windows Server 2016 and later, and on Windows 10/11.
-The installer sets it up for **all users**. The service can log on as **LocalSystem**, as the
-**`NT SERVICE\CORRECT`** virtual account, or as a **user or gMSA** you choose. Docker is not involved.
+CORRECT runs as a native Windows service on Windows Server 2016 and later, and on Windows 10/11
+(64-bit). Docker is not involved.
 
-## Requirements
+Installation has two stages:
 
-- 64-bit Windows, with an Administrator account to install
-- Internet access during install. The installer downloads Python 3.11.9 if it is missing, and it
-  downloads the pinned Python packages from PyPI.
-- A data disk with room for in-flight studies. Keep the data root short, because Windows paths
-  are limited to 260 characters and DICOM UIDs are long.
+1. **`CORRECT-Setup-<version>.exe`** installs the software only: a private copy of Python with
+   every package CORRECT needs, plus the CORRECT program files. It needs no internet access and
+   doesn't use or change any Python already on the machine.
+2. The **CORRECT Configuration** app, launched at the end of setup or from the Start Menu, creates
+   the configuration and then **installs and manages the service**.
 
-## Install
+## Getting the installer
 
-1. Copy or clone this repository onto the server, for example to `C:\Temp\CORRECT`.
-2. Double-click `install\windows\setup.cmd`, or run it from an elevated prompt with options:
+- **Releases:** download `CORRECT-Setup-<version>.exe` from the project's GitHub *Releases* page.
+- **Development builds:** go to GitHub → *Actions* → *Windows installer*, open a run, and download
+  the **CORRECT-Setup** artifact.
+- **Build it yourself on Windows:** install Inno Setup 6 (`winget install JRSoftware.InnoSetup`),
+  then run `powershell -ExecutionPolicy Bypass -File packaging\windows\build.ps1`. The installer
+  is written to `dist\`.
 
-   ```bat
-   install\windows\setup.cmd                                      :: LocalSystem, port 11112
-   install\windows\setup.cmd --account virtual                    :: NT SERVICE\CORRECT
-   install\windows\setup.cmd --account user --user CONTOSO\svc_correct
-   install\windows\setup.cmd --account user --user CONTOSO\correct-gmsa$
-   install\windows\setup.cmd --config D:\site\config.yaml --port 11112
-   install\windows\setup.cmd --data-dir D:\CORRECT                :: data on another disk
-   install\windows\setup.cmd --dry-run                            :: print steps, change nothing
-   install\windows\setup.cmd --help
-   ```
+The installer isn't code-signed yet. Windows SmartScreen will warn about an *unknown publisher*;
+choose **More info → Run anyway**.
 
-   `setup.cmd` runs these steps:
+## Choose an install mode
 
-   - It asks for elevation (UAC).
-   - It looks for an **all-users** Python 3.11. If there isn't one, it downloads
-     `python-3.11.9-amd64.exe` from python.org, **checks its SHA256**, and installs it silently
-     with `InstallAllUsers=1 PrependPath=0`.
-   - It runs `install_windows.py` with that Python.
+Setup asks whether to install **for all users** or **for me only**:
 
-   For `--account user`, the installer asks for the password. The password never goes on the
-   command line. A gMSA account (name ends in `$`) needs no password.
+| | **All users** (recommended for servers) | **Only for me** |
+|---|---|---|
+| Needs admin to install | Yes | No |
+| Program files | `C:\Program Files\CORRECT` | `%LOCALAPPDATA%\Programs\CORRECT` |
+| Config and data | `C:\ProgramData\CORRECT` | `%LOCALAPPDATA%\CORRECT` |
+| Service logs on as | **Local System** (default). Advanced options: the virtual account `NT SERVICE\CORRECT`, or a specific user or gMSA | **You**, your own Windows account |
+| Admin needed later | To change settings or control the service | Once, to install or remove the service. After that you can start, stop and reconfigure without admin |
 
-3. Set `dicom_destination`, `anonymization.site_code` and the other site values in the config,
-   using **Start Menu → CORRECT → CORRECT Configuration**. Then click **Save & Restart service**.
+`C:\ProgramData\CORRECT` may contain PHI, so in all-users mode it is locked down to
+Administrators, SYSTEM and the service account.
 
-### What gets installed
+## First run: configure, then install the service
 
-| Path / item | Purpose |
+When setup finishes, leave **Launch CORRECT Configuration** ticked. You can also open it later
+from **Start Menu → CORRECT → CORRECT Configuration**. In all-users mode it asks for UAC elevation.
+
+On first launch the app creates the data folders and a starting `config.yaml`. Then:
+
+1. **Destination tab:** enter the PACS/VNA host, port and AE title. Click **Test C-ECHO** to check
+   that it's reachable.
+2. **Anonymization tab:** set your **site code**. Check the other tabs too: listener port, contour
+   targets, features.
+3. Click **Save**. The app won't save placeholder values (`YOUR_PACS_IP` and so on) or invalid
+   ports, AE titles or paths. Comments in the file are kept, and a `config.yaml.bak` is written
+   before every save.
+4. **Service tab:** leave **Allow the DICOM listener port through Windows Firewall** ticked, then
+   click **Install service**:
+   - **All users:** choose the account (Local System, unless your data is on a network share) and
+     click **Install service**.
+   - **Only for me:** approve the UAC prompt, then enter **your Windows password** in the prompt
+     that follows. Windows needs it to run the service as you. The password is checked
+     immediately and stored by Windows, not by CORRECT. A service can't log on to an account
+     that has no password.
+
+The service then starts. It starts automatically at boot (delayed start), and Windows restarts it
+if it crashes.
+
+## Managing the service afterwards
+
+You can manage the service in either place:
+
+- **Services console (`services.msc`):** look for **CORRECT DICOM RT Structure Processor**.
+  Start, stop, startup type and recovery all work as usual.
+- **CORRECT Configuration → Service tab:** status, Start / Stop / Restart, Remove service, and
+  (all users) **Apply account & restart** to switch accounts.
+
+After changing settings, click **Save & Restart service**. If you change the listener port, the
+firewall rule is updated to match.
+
+**Choosing an account (all users):**
+
+| Account | Use when |
 |---|---|
-| `C:\Program Files\CORRECT\app\src` | Application source |
-| `C:\Program Files\CORRECT\app\venv` | Python virtualenv, including `pythonservice.exe` |
-| `C:\ProgramData\CORRECT\config.yaml` | Runtime config, kept across re-installs |
-| `C:\ProgramData\CORRECT\working` | Incoming studies and quarantine |
-| `C:\ProgramData\CORRECT\logs` | `application.log`, `transaction.log` |
-| `C:\ProgramData\CORRECT\shared` | Processing reports and `pid_mapping.json` |
-| Service `CORRECT` | Starts automatically (delayed). Restarts on failure after 10 s, 10 s, then 60 s |
-| Firewall rule `CORRECT DICOM` | Allows inbound TCP on the listener port |
-| Start Menu → CORRECT | **CORRECT Configuration** (config UI) and **CORRECT Logs** |
-| Settings → Apps | Entry named "CORRECT DICOM RT Structure Processor", used to uninstall |
+| Local System | Default. Simplest choice. On the network it acts as the computer account. |
+| `NT SERVICE\CORRECT` | You want least privilege and all paths are on local disks. |
+| A user or gMSA (`DOMAIN\name$`) | `pid_mapping_file` or the report directory is on a **network share**. Give that account rights on the share. |
 
-`C:\ProgramData\CORRECT` may hold PHI, so the installer turns off permission inheritance on it.
-Only **Administrators**, **SYSTEM** and the **service account** can access it.
+For a named user, the app grants **Log on as a service** and gives the account Modify on the
+configured local folders. Permissions on network shares are managed on the file server.
 
-## Choosing the service account
+**Only-for-me installs:** if your Windows password changes, the service can no longer log on.
+Click **Remove service**, then **Install service** again.
 
-| Account | When to use |
-|---|---|
-| **LocalSystem** (default) | Simplest setup. Has full local rights, and on the network it acts as the computer account (`DOMAIN\HOST$`). |
-| **`NT SERVICE\CORRECT`** (virtual) | Recommended when all paths are on local disks. Least privilege, no password to manage. |
-| **User or gMSA** | Use this when `pid_mapping_file` or the report directory is on a **network share (UNC path)**. Grant the account rights on the share and its folder. A gMSA (`DOMAIN\name$`) avoids password rotation. |
-
-The installer and the config UI both do the following for a named user:
-
-- grant the **Log on as a service** right
-- give the account Modify on the configured working, log, report and PID-mapping folders
-
-ACLs on UNC shares are left alone; manage those on the file server.
-
-To change the account later, open **CORRECT Configuration → Service**, pick the account and
-click **Apply account & restart**. From the command line, run this in an elevated prompt:
+## Headless servers / Server Core
 
 ```bat
-"C:\Program Files\CORRECT\app\venv\Scripts\python.exe" -m correct_admin.service_control set-account --account virtual
-"C:\Program Files\CORRECT\app\venv\Scripts\python.exe" -m correct_admin.service_control acl --writable C:\ProgramData\CORRECT\working C:\ProgramData\CORRECT\logs C:\ProgramData\CORRECT\shared --readable C:\ProgramData\CORRECT
-sc stop CORRECT && sc start CORRECT
+CORRECT-Setup-x.y.z.exe /VERYSILENT /ALLUSERS
+set PY="C:\Program Files\CORRECT\runtime\python.exe"
+%PY% -m correct_admin.service_control init-config
+notepad C:\ProgramData\CORRECT\config.yaml
+%PY% -m correct_admin.service_control install-service --scope machine --account localsystem
+%PY% -m correct_admin.service_control status
 ```
 
-## Configuration
+Other commands:
 
-There are two ways to edit the config:
+- `start`, `stop`, `restart`
+- `set-account --account virtual`
+- `set-account --account user --user DOMAIN\name`, which prompts for the password
+- `firewall --port N`
+- `remove-service`
 
-- **GUI:** Start Menu → CORRECT → **CORRECT Configuration**. It asks for UAC elevation.
-  - It validates fields: ports, AE titles of 16 characters or fewer, hosts, absolute paths.
-  - It keeps comments in the YAML and writes `config.yaml.bak` before every save.
-  - **Test C-ECHO** checks that the destination is reachable.
-  - The **Service** tab starts, stops and restarts the service and changes its account.
-- **By hand:** edit `C:\ProgramData\CORRECT\config.yaml` as Administrator, then restart the
-  service with `sc stop CORRECT` and `sc start CORRECT`, or from `services.msc`.
-  Single-quote Windows paths so backslashes are kept literally:
-  `working: 'D:\CORRECT\working'`.
+## Upgrading
 
-**Server Core** has no desktop, so edit the YAML by hand. The service itself is not affected.
+Run the newer `CORRECT-Setup-<version>.exe` and choose the same install mode. Setup:
 
-If the working directory is on a network share, set the system environment variable
-`WATCHDOG_USE_POLLING=true`, because change notifications are unreliable over SMB. A local
-working directory is strongly recommended.
+1. stops the service
+2. replaces the program files and Python packages
+3. starts the service again
 
-## Operating
-
-| Task | Command |
-|---|---|
-| Status | `sc query CORRECT` or `services.msc` |
-| Start / stop | `sc start CORRECT` / `sc stop CORRECT` |
-| Logs | `C:\ProgramData\CORRECT\logs\application.log`; service start/stop/errors in **Event Viewer → Windows Logs → Application** (source `CORRECT`) |
-| Listener check | `netstat -ano \| findstr :11112` |
-| Debug in console | `"C:\Program Files\CORRECT\app\venv\Scripts\python.exe" -m correct_admin.winservice debug` (stop the service first) |
-
-## Updating
-
-Get the new version of the repository and run `install\windows\setup.cmd` again. The installer is
-idempotent: it stops the service, replaces the source, refreshes dependencies, re-registers the
-service, and starts it again. Config and data are **kept**.
+Your configuration and data are not touched.
 
 ## Uninstalling
 
-Use **Settings → Apps → CORRECT DICOM RT Structure Processor → Uninstall**, or run:
+Use **Settings → Apps → CORRECT DICOM RT Structure Processor → Uninstall**, or
+**Start Menu → CORRECT → Uninstall CORRECT**. The uninstaller:
 
-```bat
-python "C:\Program Files\CORRECT\app\src\install\windows\uninstall_windows.py"          :: keeps ProgramData\CORRECT
-python "C:\Program Files\CORRECT\app\src\install\windows\uninstall_windows.py" --purge  :: also deletes config + data
-```
+1. stops and removes the service and its firewall rule (an only-for-me install asks for UAC
+   approval for this)
+2. removes the program files
+3. asks whether to also delete the configuration and data. The default is **No**, so a later
+   reinstall picks up where you left off. A silent uninstall (`/VERYSILENT`) always keeps them.
 
-## Troubleshooting
+## Logs and troubleshooting
 
-- **Service starts, then stops right away.**
-  - Check Event Viewer (Application log) and `application.log`.
-  - Run the `debug` command shown under Operating to see the error in a console.
-- **Error 1069 (logon failure).** The password is wrong, or the account lacks the
-  **Log on as a service** right. Re-apply the account from the config UI.
-- **"Access is denied" writing to a share.** LocalSystem and the virtual account reach the
+| Where | What |
+|---|---|
+| `<data>\logs\application.log` | Application log. Use **Start Menu → CORRECT → CORRECT Data and Logs** |
+| `<data>\logs\transaction.log` | DICOM associations and transfers |
+| Event Viewer → Windows Logs → Application | Service start/stop and startup failures (source `CORRECT`) |
+
+- **Service starts, then stops.** Check the Event Viewer and `application.log`. To see the error
+  in a console, stop the service and run:
+  `"<install dir>\runtime\python.exe" -m correct_admin.winservice debug`
+- **Error 1069 (logon failure).** The password is wrong or has changed. Reinstall the service
+  (only for me), or re-apply the account (all users).
+- **"Access is denied" on a network share.** Local System and the virtual account reach the
   network as the computer account. Use a domain user or gMSA that has rights on the share.
-- **Python packages fail to install.** The server needs HTTPS access to `pypi.org` and
-  `files.pythonhosted.org`, or a proxy configured through the `HTTPS_PROXY` environment variable.
+- **Working directory on a network share:** set the system environment variable
+  `WATCHDOG_USE_POLLING=true`. A local working directory is strongly recommended.
+- **Long paths:** Windows paths are limited to 260 characters, so keep the data folder short.

@@ -1,0 +1,8 @@
+# Bundled Python runtime for the Windows installer (read by build.ps1).
+# python-build-standalone "install_only" build: relocatable CPython with tkinter.
+# To update: pick a newer release at https://github.com/astral-sh/python-build-standalone/releases
+# (keep CPython 3.11 — requirements.txt is pinned for it) and copy the SHA256 from SHA256SUMS.
+PBS_RELEASE=20261021
+PYTHON_VERSION=3.11.17
+ASSET=cpython-3.11.17+20261021-x86_64-pc-windows-msvc-install_only.tar.gz
+SHA256=136bbb2e50fe037fd5e32126e70e95b35d1fa5dac5bd04a55b8088415ee99540

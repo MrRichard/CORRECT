@@ -23,7 +23,7 @@ CORRECT can be deployed four ways. **For a server, use the installer for your OS
 | Method | Best for | Section |
 |---|---|---|
 | **Installer script** (`install/install.sh`) | Debian/Ubuntu or RHEL/Rocky/Fedora servers | [Installer Script](#installer-script-recommended) |
-| **Windows installer** (`install/windows/setup.cmd`) | Windows Server / Windows 10+ as a native service | [Windows Service](#windows-service) |
+| **Windows installer** (`CORRECT-Setup-<version>.exe`) | Windows Server / Windows 10+ as a native service | [Windows Service](#windows-service) |
 | **Docker Compose** | Containerized / isolated deployments | [Docker Compose](#docker-compose) |
 | **Direct local install** (Python 3.11) | Development or manual control | [Direct Local Install](#direct-local-install-python-311) |
 
@@ -65,24 +65,19 @@ sudo systemctl status correct
 
 ### Windows Service
 
-From an elevated prompt on the server, after copying or cloning this repo:
+Download `CORRECT-Setup-<version>.exe` from the GitHub *Releases* page, or take the
+**CORRECT-Setup** artifact from the *Windows installer* GitHub Action. Then:
 
-```bat
-install\windows\setup.cmd                                   :: LocalSystem, port 11112
-install\windows\setup.cmd --account virtual                 :: NT SERVICE\CORRECT (least privilege)
-install\windows\setup.cmd --account user --user CONTOSO\svc_correct
-```
+1. **Run the installer.** Choose **all users** (service runs as Local System) or **only for me**
+   (service runs as your account). It installs a private Python with every dependency, so no
+   internet access is needed. It does not create the service.
+2. **Open CORRECT Configuration** at the end of setup. Set the destination and site code, then
+   click **Save**.
+3. **Service tab → Install service.** After that, manage the service in `services.msc` or in the
+   app.
 
-The installer:
-
-- installs Python 3.11 for all users if it is missing
-- installs CORRECT under `C:\Program Files\CORRECT`
-- puts config and data in `C:\ProgramData\CORRECT`
-- registers and starts the `CORRECT` service
-- adds a firewall rule
-- adds a **CORRECT Configuration** Start Menu shortcut
-
-See [`docs/installation-windows.md`](docs/installation-windows.md).
+See [`docs/installation-windows.md`](docs/installation-windows.md), which covers silent and
+Server Core installs, accounts, upgrades and uninstalling.
 
 ### Docker Compose
 

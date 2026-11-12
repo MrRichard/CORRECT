@@ -1,19 +1,29 @@
-"""Start/stop/inspect the CORRECT service on Windows (SCM) or Linux (systemd).
+"""Install, remove and control the CORRECT service on Windows (SCM) or Linux (systemd).
 
-On Windows this module also registers the pywin32 service, changes its logon
-account (LocalSystem, the NT SERVICE\\CORRECT virtual account, or a named
-user/gMSA) and applies folder ACLs. It doubles as a small CLI used by the
-Windows installer, which runs it with the venv's python.exe so that pywin32
-registers pythonservice.exe from inside the venv:
+Windows install scopes (chosen in the installer, recorded in install.json):
 
-    python -m correct_admin.service_control register --config C:\\ProgramData\\CORRECT\\config.yaml --account virtual
-    python -m correct_admin.service_control set-account --account user --user DOMAIN\\svc_correct
-    python -m correct_admin.service_control status
+* "user"    — installed for the current user; the service logs on AS that user.
+              Registering needs admin once (UAC); afterwards the user is granted
+              start/stop rights on the service, so day-to-day control needs no admin.
+* "machine" — installed for all users; the service runs as LocalSystem by default,
+              or the NT SERVICE\\CORRECT virtual account / a named user or gMSA.
+
+The config UI calls these functions directly when it is already elevated and runs
+this module as an elevated CLI (see correct_admin/elevated.py) when it is not:
+
+    python -m correct_admin.service_control init-config
+    python -m correct_admin.service_control install-service --scope machine --account localsystem
+    python -m correct_admin.service_control install-service --scope user --user DOMAIN\\me
+    python -m correct_admin.service_control set-account --account virtual
+    python -m correct_admin.service_control remove-service
+    python -m correct_admin.service_control status | start | stop | restart | account
 """
 
 import argparse
 import getpass
+import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -30,11 +40,22 @@ ACCOUNT_KINDS = (ACCOUNT_LOCALSYSTEM, ACCOUNT_VIRTUAL, ACCOUNT_USER)
 VIRTUAL_ACCOUNT_NAME = f"NT SERVICE\\{SERVICE_NAME}"
 PASSWORD_ENV = "CORRECT_SERVICE_PASSWORD"
 
+# Service rights for a non-admin user: query config/status, start, stop,
+# interrogate, read permissions.
+USER_SERVICE_RIGHTS = "CCLCRPWPLORC"
+
 
 class ServiceError(RuntimeError):
     pass
 
 
+class Cancelled(ServiceError):
+    pass
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# pure helpers (unit-tested on any OS)
+# ════════════════════════════════════════════════════════════════════════════
 def account_name_for(kind, user=None):
     """SCM logon name for an account kind."""
     if kind == ACCOUNT_LOCALSYSTEM:
@@ -68,9 +89,173 @@ def icacls_principal(account):
     return account
 
 
+def is_gmsa(user):
+    return bool(user) and user.endswith("$")
+
+
+def add_allow_ace(sddl, sid, rights=USER_SERVICE_RIGHTS):
+    """Return ``sddl`` with an allow ACE for ``sid`` added to its DACL (idempotent).
+
+    Example: "D:(A;;CCLC;;;SY)S:(AU;FA;CCLC;;;WD)" + SID -> the new ACE is appended
+    at the end of the D: section, before any S: (SACL) section.
+    """
+    ace = f"(A;;{rights};;;{sid})"
+    if ace.lower() in sddl.lower():
+        return sddl
+    m = re.search(r"D:[A-Z]*", sddl)
+    if not m:
+        raise ServiceError(f"service security descriptor has no DACL: {sddl!r}")
+    sacl = re.search(r"S:", sddl[m.end():])
+    insert_at = m.end() + sacl.start() if sacl else len(sddl)
+    return sddl[:insert_at] + ace + sddl[insert_at:]
+
+
+def config_paths(config_path):
+    """Folders the service writes to, from the effective config (defaults merged)."""
+    from netrt_core.config_loader import load_config
+    cfg = load_config(config_path)
+    dirs = cfg.get("directories", {})
+    pid = cfg.get("anonymization", {}).get("pid_mapping_file")
+    out = [dirs.get("working"), dirs.get("logs"),
+           cfg.get("reporting", {}).get("output_directory"),
+           os.path.dirname(pid) if pid else None]
+    port = cfg.get("dicom_listener", {}).get("port", 11112)
+    # UNC shares are left alone: their ACLs belong on the file server.
+    return [os.path.expanduser(p) for p in out if p and not str(p).startswith("\\\\")], int(port)
+
+
 # ════════════════════════════════════════════════════════════════════════════
 # Windows
 # ════════════════════════════════════════════════════════════════════════════
+def _winerror(e):
+    return getattr(e, "winerror", None) or (e.args[0] if getattr(e, "args", None) else None)
+
+
+def is_admin():
+    if not IS_WINDOWS:
+        return os.geteuid() == 0
+    try:
+        import ctypes
+        return bool(ctypes.windll.shell32.IsUserAnAdmin())
+    except Exception:
+        return False
+
+
+def current_user():
+    """DOMAIN\\name of the logged-on user running this process."""
+    import win32api
+    import win32con
+    return win32api.GetUserNameEx(win32con.NameSamCompatible)
+
+
+def account_sid_string(account):
+    import win32security
+    lookup = account
+    if lookup.startswith(".\\"):
+        lookup = os.environ.get("COMPUTERNAME", "") + lookup[1:]
+    sid = win32security.LookupAccountName(None, lookup)[0]
+    return win32security.ConvertSidToStringSid(sid)
+
+
+def validate_credentials(account, password):
+    """Check a user's password before handing it to the SCM (avoids error 1069 at start)."""
+    import win32con
+    import win32security
+    if "\\" in account:
+        domain, name = account.split("\\", 1)
+        if domain == ".":
+            domain = os.environ.get("COMPUTERNAME", ".")
+    else:
+        domain, name = None, account
+    try:
+        handle = win32security.LogonUser(name, domain, password,
+                                         win32con.LOGON32_LOGON_NETWORK,
+                                         win32con.LOGON32_PROVIDER_DEFAULT)
+        handle.Close()
+    except Exception as e:
+        code = _winerror(e)
+        if code == 1385:  # logon type not granted: password is right, policy blocks network logon
+            return
+        if code == 1327 and not password:
+            raise ServiceError(
+                f"{account} has no password. Windows services cannot log on to an account "
+                "without a password — set one (Ctrl+Alt+Del > Change a password) and try again.")
+        if code in (1326, 1327):
+            raise ServiceError(f"The password for {account} is incorrect.")
+        if code == 1909:
+            raise ServiceError(f"{account} is locked out.")
+        raise ServiceError(f"Could not verify the credentials for {account}: {e}")
+
+
+def grant_service_logon_right(account):
+    """Grant SeServiceLogonRight; ChangeServiceConfig does not do this automatically."""
+    import win32security
+    lookup = account
+    if lookup.startswith(".\\"):
+        lookup = os.environ.get("COMPUTERNAME", "") + lookup[1:]
+    sid = win32security.LookupAccountName(None, lookup)[0]
+    policy = win32security.LsaOpenPolicy(None, win32security.POLICY_ALL_ACCESS)
+    try:
+        win32security.LsaAddAccountRights(policy, sid, ["SeServiceLogonRight"])
+    finally:
+        win32security.LsaClose(policy)
+
+
+def grant_user_service_control(service, account):
+    """Let ``account`` start/stop/query the service without admin rights."""
+    sid = account_sid_string(account)
+    proc = _run(["sc.exe", "sdshow", service])
+    sddl = "".join(line.strip() for line in proc.stdout.splitlines() if line.strip())
+    new = add_allow_ace(sddl, sid)
+    if new != sddl:
+        _run(["sc.exe", "sdset", service, new])
+
+
+def apply_windows_acls(account, writable_dirs, readable_paths=()):
+    """Give ``account`` Modify on ``writable_dirs`` (inherited) and Read on ``readable_paths``."""
+    principal = icacls_principal(account)
+    for d in writable_dirs:
+        if not d:
+            continue
+        os.makedirs(d, exist_ok=True)
+        _run(["icacls", d, "/grant", f"{principal}:(OI)(CI)M", "/Q"])
+    for p in readable_paths:
+        if p and os.path.exists(p):
+            flags = "(OI)(CI)RX" if os.path.isdir(p) else "R"
+            _run(["icacls", p, "/grant", f"{principal}:{flags}", "/Q"])
+
+
+def pythonservice_exe():
+    """pythonservice.exe next to python.exe (placed there by packaging/windows/build.ps1).
+
+    For a development venv it is copied there from the pywin32 package on demand,
+    together with the DLLs it needs.
+    """
+    import win32service
+    target_dir = sys.exec_prefix
+    exe = os.path.join(target_dir, "pythonservice.exe")
+    pywin32_dir = os.path.dirname(win32service.__file__)
+    site_packages = os.path.dirname(pywin32_dir)
+    ver = f"{sys.version_info.major}{sys.version_info.minor}"
+    needed = {
+        "pythonservice.exe": [os.path.join(pywin32_dir, "pythonservice.exe")],
+        f"pywintypes{ver}.dll": [os.path.join(site_packages, "pywin32_system32", f"pywintypes{ver}.dll")],
+        f"python{ver}.dll": [os.path.join(sys.base_exec_prefix, f"python{ver}.dll")],
+        "python3.dll": [os.path.join(sys.base_exec_prefix, "python3.dll")],
+    }
+    for name, sources in needed.items():
+        dst = os.path.join(target_dir, name)
+        if os.path.exists(dst):
+            continue
+        for src in sources:
+            if os.path.exists(src):
+                shutil.copy2(src, dst)
+                break
+    if not os.path.exists(exe):
+        raise ServiceError(f"pythonservice.exe not found in {target_dir}")
+    return exe
+
+
 class WindowsServiceController:
     def __init__(self, name=SERVICE_NAME):
         self.name = name
@@ -81,8 +266,8 @@ class WindowsServiceController:
         try:
             win32serviceutil.QueryServiceStatus(self.name)
             return True
-        except Exception as e:  # pywintypes.error 1060 = does not exist
-            if getattr(e, "winerror", None) == 1060:
+        except Exception as e:
+            if _winerror(e) == 1060:  # ERROR_SERVICE_DOES_NOT_EXIST
                 return False
             raise
 
@@ -116,9 +301,12 @@ class WindowsServiceController:
 
     # -- control ---------------------------------------------------------------
     def start(self):
+        import win32service
         import win32serviceutil
+        if self.status() == "running":
+            return
         win32serviceutil.StartService(self.name)
-        win32serviceutil.WaitForServiceStatus(self.name, _running(), 60)
+        win32serviceutil.WaitForServiceStatus(self.name, win32service.SERVICE_RUNNING, 60)
 
     def stop(self):
         import win32service
@@ -134,7 +322,7 @@ class WindowsServiceController:
 
     # -- registration ----------------------------------------------------------
     def register(self, config_path, kind=ACCOUNT_LOCALSYSTEM, user=None, password=None):
-        """Install (or update) the pywin32 service and point it at ``config_path``."""
+        """Create (or update) the pywin32 service pointing at ``config_path``."""
         import win32service
         import win32serviceutil
         from . import winservice
@@ -149,6 +337,7 @@ class WindowsServiceController:
             startType=win32service.SERVICE_AUTO_START,
             userName=account,
             password=password,
+            exeName=pythonservice_exe(),
             description=SERVICE_DESCRIPTION,
             delayedstart=True,
         )
@@ -157,7 +346,6 @@ class WindowsServiceController:
         else:
             win32serviceutil.InstallService(class_string, self.name, SERVICE_DISPLAY_NAME, **common)
         win32serviceutil.SetServiceCustomOption(self.name, "ConfigPath", os.path.abspath(config_path))
-        _ensure_pythonservice_runtime()
 
         # Restart on crash (10s, 10s, 60s); failureflag=1 also treats a non-zero exit
         # code on stop (e.g. a startup exception) as a failure.
@@ -199,95 +387,73 @@ class WindowsServiceController:
         return account
 
 
-def _running():
-    import win32service
-    return win32service.SERVICE_RUNNING
-
-
 def _password_for(kind, password):
     if kind in (ACCOUNT_LOCALSYSTEM, ACCOUNT_VIRTUAL):
         return ""
     if password is None:
         password = os.environ.get(PASSWORD_ENV)
-    if password is None:
-        password = ""  # gMSA accounts (DOMAIN\name$) have no password
-    return password
+    return password or ""  # gMSA accounts (DOMAIN\name$) have no password
 
 
-def grant_service_logon_right(account):
-    """Grant SeServiceLogonRight; ChangeServiceConfig does not do this automatically."""
-    import win32security
-    lookup = account
-    if lookup.startswith(".\\"):
-        lookup = os.environ.get("COMPUTERNAME", "") + lookup[1:]
-    sid = win32security.LookupAccountName(None, lookup)[0]
-    policy = win32security.LsaOpenPolicy(None, win32security.POLICY_ALL_ACCESS)
-    try:
-        win32security.LsaAddAccountRights(policy, sid, ["SeServiceLogonRight"])
-    finally:
-        win32security.LsaClose(policy)
+# ── high-level flows used by the UI and the CLI ─────────────────────────────
+def install_service(config_path, scope, kind=ACCOUNT_LOCALSYSTEM, user=None, password=None,
+                    firewall=True, start=True):
+    """Register the service and everything it needs. Must run elevated. Returns the account."""
+    from netrt_core.platform_paths import SCOPE_USER
+    from .setup_tasks import init_config, set_firewall_rule
+
+    if scope == SCOPE_USER:
+        kind = ACCOUNT_USER
+        if not user:
+            raise ServiceError("--user is required for a current-user install")
+    if not os.path.exists(config_path):
+        init_config(os.path.dirname(os.path.abspath(config_path)), scope)
+
+    account = account_name_for(kind, user)
+    if kind == ACCOUNT_USER and not is_gmsa(user):
+        validate_credentials(account, _password_for(kind, password))
+
+    ctl = WindowsServiceController()
+    ctl.register(config_path, kind, user, password)
+    writable, port = config_paths(config_path)
+
+    if scope == SCOPE_USER:
+        # Data lives in the user's own profile; just let them control the service.
+        grant_user_service_control(ctl.name, account)
+    elif kind != ACCOUNT_LOCALSYSTEM:
+        config_dir = os.path.dirname(os.path.abspath(config_path))
+        apply_windows_acls(account, writable, [config_dir, config_path])
+
+    if firewall:
+        set_firewall_rule(port)
+    if start:
+        ctl.start()
+    return account
 
 
-def apply_windows_acls(account, writable_dirs, readable_paths=()):
-    """Give ``account`` Modify on ``writable_dirs`` (inherited) and Read on ``readable_paths``.
+def change_account(config_path, kind, user=None, password=None, restart=True):
+    """Switch the logon account of an installed service (machine scope). Must run elevated."""
+    account = account_name_for(kind, user)
+    if kind == ACCOUNT_USER and not is_gmsa(user):
+        validate_credentials(account, _password_for(kind, password))
+    ctl = WindowsServiceController()
+    ctl.set_account(kind, user, password)
+    if kind != ACCOUNT_LOCALSYSTEM:
+        writable, _ = config_paths(config_path)
+        config_dir = os.path.dirname(os.path.abspath(config_path))
+        apply_windows_acls(account, writable, [config_dir, config_path])
+    if restart and ctl.status() != "stopped":
+        ctl.restart()
+    elif restart:
+        ctl.start()
+    return account
 
-    Administrators and SYSTEM keep full control through inheritance from ProgramData.
-    """
-    principal = icacls_principal(account)
-    for d in writable_dirs:
-        if not d:
-            continue
-        os.makedirs(d, exist_ok=True)
-        _run(["icacls", d, "/grant", f"{principal}:(OI)(CI)M", "/Q"])
-    for p in readable_paths:
-        if p and os.path.exists(p):
-            flags = "(OI)(CI)RX" if os.path.isdir(p) else "R"
-            _run(["icacls", p, "/grant", f"{principal}:{flags}", "/Q"])
 
-
-def _ensure_pythonservice_runtime():
-    """Make sure pythonservice.exe can start from the venv.
-
-    pywin32 normally copies pythonservice.exe next to the venv's interpreter during
-    InstallService. When it does not, the service fails with "module not found" /
-    DLL errors, so copy the pieces it needs (pythonservice.exe, pywintypes3XX.dll,
-    python3XX.dll, python3.dll) into sys.exec_prefix when they are missing.
-    """
-    import win32service  # noqa: F401  (locate pywin32)
-    import win32serviceutil
-
-    target_dir = sys.exec_prefix
-    try:
-        exe = win32serviceutil.LocatePythonServiceExe()
-    except Exception:
-        exe = None
-    pywin32_dir = os.path.dirname(win32service.__file__)
-    site_packages = os.path.dirname(pywin32_dir)
-    candidates = [
-        exe,
-        os.path.join(pywin32_dir, "pythonservice.exe"),
-    ]
-    if not os.path.exists(os.path.join(target_dir, "pythonservice.exe")):
-        for c in candidates:
-            if c and os.path.exists(c):
-                shutil.copy2(c, os.path.join(target_dir, "pythonservice.exe"))
-                break
-
-    ver = f"{sys.version_info.major}{sys.version_info.minor}"
-    dll_sources = {
-        f"pywintypes{ver}.dll": [os.path.join(site_packages, "pywin32_system32", f"pywintypes{ver}.dll")],
-        f"pythoncom{ver}.dll": [os.path.join(site_packages, "pywin32_system32", f"pythoncom{ver}.dll")],
-        f"python{ver}.dll": [os.path.join(sys.base_exec_prefix, f"python{ver}.dll")],
-        "python3.dll": [os.path.join(sys.base_exec_prefix, "python3.dll")],
-    }
-    for name, sources in dll_sources.items():
-        dst = os.path.join(target_dir, name)
-        if os.path.exists(dst):
-            continue
-        for src in sources:
-            if os.path.exists(src):
-                shutil.copy2(src, dst)
-                break
+def remove_service():
+    """Stop and delete the service and its firewall rule. Must run elevated."""
+    from .setup_tasks import remove_firewall_rule
+    WindowsServiceController().unregister()
+    remove_firewall_rule()
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -352,54 +518,154 @@ def _run(cmd):
 
 
 def _resolve_password(args):
-    if args.account != ACCOUNT_USER:
+    """Password for --account user, from env, a GUI prompt, or the console. Never argv."""
+    if getattr(args, "account", None) != ACCOUNT_USER or is_gmsa(args.user):
         return None
     if os.environ.get(PASSWORD_ENV) is not None:
         return os.environ[PASSWORD_ENV]
-    if args.user and args.user.endswith("$"):
-        return ""  # gMSA
-    return getpass.getpass(f"Password for {args.user}: ")
+    account = account_name_for(ACCOUNT_USER, args.user)
+    if getattr(args, "prompt_password", False):
+        from .elevated import ask_password_gui
+        pw = ask_password_gui(account)
+        if pw is None:
+            raise Cancelled("cancelled")
+        return pw
+    return getpass.getpass(f"Windows password for {account}: ")
 
 
-def main(argv=None):
+def _default_config():
+    from netrt_core.platform_paths import default_config_path
+    return default_config_path()
+
+
+def _default_scope():
+    from netrt_core.platform_paths import SCOPE_MACHINE, install_scope
+    return install_scope() or SCOPE_MACHINE
+
+
+def build_parser():
     parser = argparse.ArgumentParser(prog="python -m correct_admin.service_control")
+    parser.add_argument("--result-file", help=argparse.SUPPRESS)  # JSON outcome for the UI
+    parser.add_argument("--elevate-if-needed", action="store_true",
+                        help="re-run through UAC when not elevated (Windows)")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
-    p_reg = sub.add_parser("register", help="install/update the Windows service")
-    p_reg.add_argument("--config", required=True)
-    for p in (p_reg, sub.add_parser("set-account", help="change the Windows service logon account")):
-        p.add_argument("--account", choices=ACCOUNT_KINDS, default=ACCOUNT_LOCALSYSTEM)
-        p.add_argument("--user", help="DOMAIN\\name, .\\localname or DOMAIN\\gmsa$ (with --account user)")
+    p_init = sub.add_parser("init-config", help="create data folders and config.yaml if missing")
+    p_init.add_argument("--data-dir")
+    p_init.add_argument("--port", type=int)
 
-    p_acl = sub.add_parser("acl", help="grant the service account access to data folders")
+    p_inst = sub.add_parser("install-service", help="register, configure and start the Windows service")
+    p_inst.add_argument("--scope", choices=("user", "machine"))
+    p_inst.add_argument("--config")
+    p_inst.add_argument("--no-firewall", action="store_true")
+    p_inst.add_argument("--no-start", action="store_true")
+
+    p_acct = sub.add_parser("set-account", help="change the Windows service logon account")
+    p_acct.add_argument("--config")
+    for p in (p_inst, p_acct):
+        p.add_argument("--account", choices=ACCOUNT_KINDS, default=ACCOUNT_LOCALSYSTEM)
+        p.add_argument("--user", help="DOMAIN\\name, .\\localname or DOMAIN\\gmsa$")
+        p.add_argument("--prompt-password", action="store_true", help=argparse.SUPPRESS)
+
+    p_fw = sub.add_parser("firewall", help="add/update or remove the inbound firewall rule")
+    g = p_fw.add_mutually_exclusive_group(required=True)
+    g.add_argument("--port", type=int)
+    g.add_argument("--remove", action="store_true")
+
+    p_acl = sub.add_parser("acl", help="grant the service account access to folders")
     p_acl.add_argument("--writable", nargs="*", default=[])
     p_acl.add_argument("--readable", nargs="*", default=[])
 
-    sub.add_parser("unregister")
+    sub.add_parser("remove-service", help="stop and delete the service + firewall rule")
     for name in ("start", "stop", "restart", "status", "account"):
         sub.add_parser(name)
+    return parser
 
-    args = parser.parse_args(argv)
-    ctl = get_controller()
+
+def _execute(args):
+    """Run one command; returns a short message."""
+    if args.cmd == "init-config":
+        from .setup_tasks import init_config
+        path, created = init_config(args.data_dir, port=args.port)
+        return f"{'created' if created else 'exists'}: {path}"
+    if args.cmd == "status":
+        return get_controller().status()
+    if args.cmd == "account":
+        return get_controller().get_account()
+    if args.cmd in ("start", "stop", "restart"):
+        getattr(get_controller(), args.cmd)()
+        return f"{args.cmd}: ok"
+    if not IS_WINDOWS:
+        raise ServiceError(f"'{args.cmd}' is only available on Windows")
+
+    if args.cmd == "install-service":
+        scope = args.scope or _default_scope()
+        user = args.user
+        if scope == "user" and not user:
+            user = current_user()
+        if scope == "user":
+            args.account = ACCOUNT_USER
+            args.user = user
+        account = install_service(args.config or _default_config(), scope, args.account, user,
+                                  _resolve_password(args), firewall=not args.no_firewall,
+                                  start=not args.no_start)
+        return f"installed; logs on as {account}"
+    if args.cmd == "set-account":
+        return "logs on as " + change_account(args.config or _default_config(), args.account,
+                                              args.user, _resolve_password(args))
+    if args.cmd == "remove-service":
+        remove_service()
+        return "removed"
+    if args.cmd == "firewall":
+        from .setup_tasks import remove_firewall_rule, set_firewall_rule
+        if args.remove:
+            remove_firewall_rule()
+            return "firewall rule removed"
+        set_firewall_rule(args.port)
+        return f"firewall rule allows TCP {args.port}"
+    if args.cmd == "acl":
+        apply_windows_acls(get_controller().get_account(), args.writable, args.readable)
+        return "acl: ok"
+    raise ServiceError(f"unknown command {args.cmd}")
+
+
+def _say(message, ok=True):
+    stream = sys.stdout if ok else sys.stderr
+    if stream is not None:  # None under pythonw.exe (the elevated child)
+        print(message, file=stream)
+
+
+def main(argv=None):
+    argv = list(sys.argv[1:] if argv is None else argv)
+    args = build_parser().parse_args(argv)
+
+    if args.elevate_if_needed and IS_WINDOWS and not is_admin():
+        if args.cmd == "remove-service" and not WindowsServiceController().is_installed():
+            from .setup_tasks import firewall_rule_exists
+            if not firewall_rule_exists():
+                return 0  # nothing to do, no UAC prompt
+        from .elevated import run_service_command
+        rest = [a for a in argv if a != "--elevate-if-needed"]
+        ok, message = run_service_command(rest)
+        _say(message, ok)
+        return 0 if ok else 1
+
+    ok, message = True, ""
     try:
-        if args.cmd == "register":
-            print(ctl.register(args.config, args.account, args.user, _resolve_password(args)))
-        elif args.cmd == "set-account":
-            print(ctl.set_account(args.account, args.user, _resolve_password(args)))
-        elif args.cmd == "acl":
-            apply_windows_acls(ctl.get_account(), args.writable, args.readable)
-        elif args.cmd == "unregister":
-            ctl.unregister()
-        elif args.cmd == "status":
-            print(ctl.status())
-        elif args.cmd == "account":
-            print(ctl.get_account())
-        else:
-            getattr(ctl, args.cmd)()
+        message = _execute(args)
+    except Cancelled as e:
+        ok, message = False, str(e)
     except ServiceError as e:
-        print(f"ERROR: {e}", file=sys.stderr)
-        return 1
-    return 0
+        ok, message = False, str(e)
+    except Exception as e:  # pywintypes.error etc.
+        detail = getattr(e, "strerror", None) or str(e)
+        ok, message = False, f"{type(e).__name__}: {detail}"
+
+    if args.result_file:
+        with open(args.result_file, "w", encoding="utf-8") as f:
+            json.dump({"ok": ok, "message": message}, f)
+    _say(message if ok else f"ERROR: {message}", ok)
+    return 0 if ok else 1
 
 
 if __name__ == "__main__":

@@ -1,0 +1,151 @@
+name: Windows installer
+
+on:
+  push:
+    branches: [master, windows_development]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt -r requirements-dev.txt
+      - run: python -m pytest -q
+
+  build:
+    runs-on: windows-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version
+        id: version
+        shell: pwsh
+        run: |
+          $init = Get-Content netrt_core/__init__.py -Raw
+          if ($init -match '__version__\s*=\s*"([^"]+)"') { "version=$($Matches[1])" >> $env:GITHUB_OUTPUT }
+
+      - name: Cache Python runtime download
+        uses: actions/cache@v4
+        with:
+          path: build/windows/cache
+          key: pbs-${{ hashFiles('packaging/windows/runtime.lock') }}
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) {
+            choco install innosetup -y --no-progress
+          }
+
+      - name: Build installer
+        shell: pwsh
+        run: ./packaging/windows/build.ps1
+
+      - name: Run tests with the bundled runtime
+        shell: pwsh
+        run: |
+          $py = "build/windows/stage/runtime/python.exe"
+          & $py -m pip install --disable-pip-version-check pytest==9.1.1
+          & $py -m pytest -q
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CORRECT-Setup
+          path: dist/CORRECT-Setup-*.exe
+          if-no-files-found: error
+
+  smoke-install:
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: CORRECT-Setup
+          path: dist
+
+      - name: Install for all users (silent)
+        shell: pwsh
+        run: |
+          $exe = (Get-ChildItem dist/CORRECT-Setup-*.exe).FullName
+          $p = Start-Process $exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/ALLUSERS','/LOG=install.log' -Wait -PassThru
+          Get-Content install.log -Tail 20
+          if ($p.ExitCode -ne 0) { throw "installer exit code $($p.ExitCode)" }
+          Get-Content "$env:ProgramFiles\CORRECT\install.json"
+          if (Get-Service CORRECT -ErrorAction SilentlyContinue) { throw "installer must not create the service" }
+
+      - name: First-run setup, install service, C-ECHO
+        shell: pwsh
+        run: |
+          $py = "$env:ProgramFiles\CORRECT\runtime\python.exe"
+          & $py -m correct_admin.service_control init-config
+          if ($LASTEXITCODE -ne 0) { throw "init-config failed" }
+          & $py -m correct_admin.service_control install-service --scope machine --account localsystem
+          if ($LASTEXITCODE -ne 0) { throw "install-service failed" }
+          Get-Service CORRECT | Format-List Name, Status, StartType
+          $ok = $false
+          foreach ($i in 1..30) {
+            & $py -c "from pynetdicom import AE; from pynetdicom.sop_class import Verification; ae=AE(); ae.add_requested_context(Verification); a=ae.associate('127.0.0.1', 11112, ae_title='CORRECT'); import sys; ok=a.is_established and a.send_c_echo().Status==0; a.release() if a.is_established else None; sys.exit(0 if ok else 1)"
+            if ($LASTEXITCODE -eq 0) { $ok = $true; break }
+            Start-Sleep -Seconds 2
+          }
+          if (-not $ok) {
+            Get-Content "$env:ProgramData\CORRECT\logs\application.log" -ErrorAction SilentlyContinue -Tail 50
+            Get-WinEvent -LogName Application -MaxEvents 20 | Format-List TimeCreated, ProviderName, Message
+            throw "service did not answer C-ECHO"
+          }
+          Write-Host "C-ECHO OK"
+
+      - name: Restart via service control, then uninstall
+        shell: pwsh
+        run: |
+          $py = "$env:ProgramFiles\CORRECT\runtime\python.exe"
+          & $py -m correct_admin.service_control restart
+          if ($LASTEXITCODE -ne 0) { throw "restart failed" }
+          $p = Start-Process "$env:ProgramFiles\CORRECT\unins000.exe" -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait -PassThru
+          Start-Sleep -Seconds 5
+          if (Get-Service CORRECT -ErrorAction SilentlyContinue) { throw "service still registered after uninstall" }
+          if (Test-Path "$env:ProgramFiles\CORRECT\runtime") { throw "program files left behind" }
+          if (-not (Test-Path "$env:ProgramData\CORRECT\config.yaml")) { throw "silent uninstall must keep config" }
+          Write-Host "uninstall OK"
+
+      - name: Install for current user only (silent), then uninstall
+        shell: pwsh
+        run: |
+          $exe = (Get-ChildItem dist/CORRECT-Setup-*.exe).FullName
+          $p = Start-Process $exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/CURRENTUSER' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "installer exit code $($p.ExitCode)" }
+          $root = "$env:LOCALAPPDATA\Programs\CORRECT"
+          Get-Content "$root\install.json"
+          & "$root\runtime\python.exe" -c "from netrt_core.platform_paths import install_scope, default_config_path; print(install_scope(), default_config_path()); assert install_scope() == 'user'"
+          if ($LASTEXITCODE -ne 0) { throw "per-user install metadata wrong" }
+          $p = Start-Process "$root\unins000.exe" -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait -PassThru
+          Start-Sleep -Seconds 3
+          if (Test-Path "$root\runtime") { throw "per-user files left behind" }
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build, smoke-install, linux-tests]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: CORRECT-Setup
+          path: dist
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/CORRECT-Setup-*.exe

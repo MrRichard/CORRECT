@@ -32,3 +32,5 @@ include = ["netrt_core*", "correct_admin*"]
 
 [tool.setuptools]
 py-modules = ["main", "DicomAnonymizer"]
+[tool.setuptools.package-data]
+correct_admin = ["templates/*.yaml"]

@@ -17,7 +17,9 @@ def _src(tmp_path):
 def test_symlink_preferred(tmp_path):
     src = _src(tmp_path)
     dst = tmp_path / "b.dcm"
-    assert fs_utils.link_or_copy(str(src), str(dst)) == "symlink"
+    method = fs_utils.link_or_copy(str(src), str(dst))
+    # Windows only allows symlinks with SeCreateSymbolicLinkPrivilege / Developer Mode.
+    assert method == "symlink" or (sys.platform == "win32" and method == "hardlink")
     assert dst.read_bytes() == b"DICM-data"
 
 

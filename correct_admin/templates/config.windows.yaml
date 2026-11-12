@@ -1,11 +1,11 @@
-# config.windows.example.yaml — CORRECT runtime configuration template (Windows)
+# CORRECT runtime configuration (Windows)
 #
-# Copied to C:\ProgramData\CORRECT\config.yaml by install_windows.py on first install.
-# Edit with the "CORRECT Configuration" Start Menu shortcut, or any text editor
-# (run as Administrator). Edit every YOUR_* / SITE value below before going live.
+# Created by the CORRECT Configuration app on first launch. Edit it there, or in any
+# text editor (an "All users" install needs Administrator rights). Replace every
+# YOUR_* / SITE value below before going live, then restart the service.
 #
-# Paths: single-quoted so backslashes are literal. Keep the data root short
-# (Windows MAX_PATH is 260 characters; study UIDs are long).
+# Paths are single-quoted so backslashes are literal. Keep the data root short
+# (Windows MAX_PATH is 260 characters and DICOM UIDs are long).
 
 dicom_listener:
   host: 0.0.0.0
@@ -19,8 +19,8 @@ dicom_destination:
   ae_title: YOUR_PACS_AET   # AE title of the destination PACS/VNA
 
 directories:
-  working: 'C:\ProgramData\CORRECT\working'
-  logs: 'C:\ProgramData\CORRECT\logs'
+  working: '{DATA_DIR}\working'
+  logs: '{DATA_DIR}\logs'
   quarantine_subdir: quarantine
 
 logging:
@@ -71,7 +71,7 @@ anonymization:
   apply_site_code: true
   apply_anonymization_rules: true
   site_code: SITE           # your institution code, e.g. WFU
-  pid_mapping_file: 'C:\ProgramData\CORRECT\shared\pid_mapping.json'
+  pid_mapping_file: '{DATA_DIR}\shared\pid_mapping.json'
   study_description: "CORRECT Study Treatment Plan"
   rules:
     remove_tags:
@@ -97,4 +97,4 @@ anonymization:
     generate_random_id_prefix: ""
 
 reporting:
-  output_directory: 'C:\ProgramData\CORRECT\shared'
+  output_directory: '{DATA_DIR}\shared'
