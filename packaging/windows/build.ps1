@@ -45,8 +45,11 @@ if ($init -notmatch '__version__\s*=\s*"([^"]+)"') { throw 'cannot read netrt_co
 $Version = $Matches[1]
 
 $lock = @{}
-Get-Content (Join-Path $PSScriptRoot 'runtime.lock') | Where-Object { $_ -match '^\s*[A-Z_]+=' } | ForEach-Object {
+Get-Content (Join-Path $PSScriptRoot 'runtime.lock') | Where-Object { $_ -match '^\s*[A-Z0-9_]+=' } | ForEach-Object {
     $k, $v = $_ -split '=', 2; $lock[$k.Trim()] = $v.Trim()
+}
+foreach ($key in @('PBS_RELEASE', 'PYTHON_VERSION', 'ASSET', 'SHA256')) {
+    if (-not $lock[$key]) { throw "runtime.lock is missing $key" }
 }
 Write-Host "CORRECT $Version  |  Python $($lock.PYTHON_VERSION) (python-build-standalone $($lock.PBS_RELEASE))"
 
