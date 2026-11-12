@@ -39,9 +39,10 @@ LicenseFile={#StageDir}\app\LICENSE.txt
 InfoBeforeFile={#StageDir}\app\DISCLAIMER.md
 OutputDir={#OutputDir}
 OutputBaseFilename=CORRECT-Setup-{#AppVersion}
-Compression=lzma2/ultra64
+Compression=lzma2/max
 SolidCompression=yes
-LZMANumBlockThreads=4
+; Compress in the 64-bit helper: the 32-bit compiler runs out of memory on ~1 GB of packages.
+LZMAUseSeparateProcess=yes
 WizardStyle=modern
 SetupLogging=yes
 CloseApplications=no

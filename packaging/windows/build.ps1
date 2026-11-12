@@ -115,13 +115,17 @@ foreach ($p in @('Lib\test', 'Lib\idlelib\idle_test', 'Lib\tkinter\test')) {
 # ── smoke check ─────────────────────────────────────────────────────────────
 # (No double quotes in inline Python: Windows PowerShell 5.1 mangles them for native commands.)
 Step 'Smoke-testing the staged runtime'
+# Run from the stage folder so CORRECT must come from app\ via correct.pth, not the repo checkout.
+Push-Location $Stage
 Invoke-Checked $py @('-c', @'
 import sys, tkinter, cv2, numpy, scipy, pydicom, pynetdicom, highdicom, rt_utils, ruamel.yaml
 import win32serviceutil, servicemanager, win32security
-import netrt_core.app, correct_admin.config_ui, correct_admin.service_control, correct_admin.winservice
+import os, netrt_core.app, correct_admin.config_ui, correct_admin.service_control, correct_admin.winservice
 from netrt_core.platform_paths import install_info
+assert os.sep + 'stage' + os.sep + 'app' + os.sep in netrt_core.app.__file__, netrt_core.app.__file__
 print('runtime OK:', sys.version.split()[0], '| app from', netrt_core.app.__file__)
 '@)
+Pop-Location
 
 if ($SkipInstaller) { Write-Host "Staged at $Stage (installer skipped)"; exit 0 }
 
