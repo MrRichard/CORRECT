@@ -1,4 +1,11 @@
-name: Windows installer
+name: Installers
+
+# Builds and tests every installer on each push / PR:
+#   Windows  CORRECT-Setup-<ver>.exe        (packaging/windows)
+#   Linux    correct_<ver>-1_amd64.deb      (packaging/linux)
+#            correct-<ver>-1.x86_64.rpm
+# A pushed tag v<ver> (must equal netrt_core.__version__) also creates a DRAFT GitHub
+# release with all three + SHA256SUMS; review it on GitHub and click Publish.
 
 on:
   push:
@@ -135,17 +142,118 @@ jobs:
           Start-Sleep -Seconds 3
           if (Test-Path "$root\runtime") { throw "per-user files left behind" }
 
+  linux-packages:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Python runtime + nFPM downloads
+        uses: actions/cache@v4
+        with:
+          path: build/linux/cache
+          key: linux-${{ hashFiles('packaging/linux/runtime.lock') }}
+
+      - name: Build .deb and .rpm
+        run: packaging/linux/build.sh
+
+      - name: Run tests with the bundled runtime
+        run: |
+          py=build/linux/stage/opt/correct/runtime/bin/python3
+          $py -m pip install --disable-pip-version-check -q pytest==9.1.1
+          $py -m pytest -q
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CORRECT-linux
+          path: |
+            dist/correct_*.deb
+            dist/correct-*.rpm
+          if-no-files-found: error
+
+  linux-package-test:
+    needs: linux-packages
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [ubuntu:22.04, ubuntu:24.04, debian:11, debian:12,
+                rockylinux:8, rockylinux:9, almalinux:10, fedora:43]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: CORRECT-linux
+          path: dist
+      - name: Install, run, C-ECHO, upgrade, remove in ${{ matrix.image }}
+        run: |
+          case "${{ matrix.image }}" in ubuntu*|debian*) pkg=$(ls dist/correct_*.deb);; *) pkg=$(ls dist/correct-*.rpm);; esac
+          docker run --rm -v "$PWD:/src:ro" "${{ matrix.image }}" sh /src/packaging/linux/test-package.sh "/src/$pkg"
+
+  linux-systemd-test:
+    needs: linux-packages
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: rockylinux:9
+            prep: dnf -y -q install systemd procps-ng
+            pkg: rpm
+          - image: ubuntu:24.04
+            prep: apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq systemd systemd-sysv procps
+            pkg: deb
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: CORRECT-linux
+          path: dist
+      - name: Unit + maintainer scripts under systemd (${{ matrix.image }})
+        run: |
+          printf 'FROM %s\nRUN %s\nCMD ["/sbin/init"]\n' "${{ matrix.image }}" "${{ matrix.prep }}" > Dockerfile.systemd
+          docker build -q -t correct-systemd -f Dockerfile.systemd .
+          c=$(docker run -d --privileged --cgroupns=host -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
+                --tmpfs /run --tmpfs /tmp -v "$PWD:/src:ro" correct-systemd)
+          sleep 5
+          pkg=$(ls dist/*.${{ matrix.pkg }})
+          docker exec "$c" sh /src/packaging/linux/test-systemd.sh "/src/$pkg"
+
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [build, smoke-install, linux-tests]
+    needs: [build, smoke-install, linux-tests, linux-packages, linux-package-test, linux-systemd-test]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+
+      - name: Tag must match netrt_core.__version__
+        run: |
+          version=$(sed -n 's/^__version__ *= *"\([^"]*\)".*/\1/p' netrt_core/__init__.py)
+          if [ "${GITHUB_REF_NAME}" != "v${version}" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} does not match netrt_core.__version__ ${version}"
+            exit 1
+          fi
+
       - uses: actions/download-artifact@v4
         with:
           name: CORRECT-Setup
           path: dist
-      - uses: softprops/action-gh-release@v2
+      - uses: actions/download-artifact@v4
         with:
-          files: dist/CORRECT-Setup-*.exe
+          name: CORRECT-linux
+          path: dist
+
+      - name: Checksums
+        run: cd dist && sha256sum CORRECT-Setup-*.exe correct_*.deb correct-*.rpm > SHA256SUMS && cat SHA256SUMS
+
+      # Draft: nothing is public until someone presses Publish on the release page.
+      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65  # v2.6.2
+        with:
+          draft: true
+          generate_release_notes: true
+          files: |
+            dist/CORRECT-Setup-*.exe
+            dist/correct_*.deb
+            dist/correct-*.rpm
+            dist/SHA256SUMS
