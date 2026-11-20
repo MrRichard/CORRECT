@@ -1,0 +1,81 @@
+# nFPM config for the CORRECT .deb and .rpm — rendered by build.sh, which substitutes
+# CORRECT_VERSION, CORRECT_STAGE (build/linux/stage) and CORRECT_PKG (this folder).
+#
+# Layout (self-contained; no system Python involved):
+#   /opt/correct/runtime            bundled CPython + all dependencies
+#   /opt/correct/app                CORRECT source (netrt_core, correct_admin, main.py)
+#   /etc/correct/config.yaml        runtime config (conffile: never overwritten on upgrade)
+#   /usr/lib/systemd/system/correct.service
+#   /usr/bin/correct, /usr/bin/correct-config
+#   /var/lib/correct/{working,shared}, /var/log/correct   created by postinstall
+
+name: correct
+arch: amd64
+platform: linux
+version: ${CORRECT_VERSION}
+version_schema: semver
+release: 1
+section: science
+priority: optional
+maintainer: MrRichard <MrRichard@users.noreply.github.com>
+vendor: CORRECT
+homepage: https://github.com/MrRichard/CORRECT
+license: MIT
+description: |-
+  CORRECT DICOM RT Structure Set Processor.
+  Receives DICOM studies over C-STORE, turns RT Structure Sets into overlay, GSPS,
+  SEG and secondary-capture series, anonymizes them and forwards them to a PACS/VNA.
+  Ships its own Python runtime; runs as the 'correct' systemd service.
+
+contents:
+  - src: ${CORRECT_STAGE}/opt/correct/runtime
+    dst: /opt/correct/runtime
+    type: tree
+  - src: ${CORRECT_STAGE}/opt/correct/app
+    dst: /opt/correct/app
+    type: tree
+
+  - src: ${CORRECT_STAGE}/etc/correct/config.yaml
+    dst: /etc/correct/config.yaml
+    type: config|noreplace
+    file_info:
+      mode: 0640
+
+  - src: ${CORRECT_PKG}/correct.service
+    dst: /usr/lib/systemd/system/correct.service
+    file_info:
+      mode: 0644
+  - src: ${CORRECT_PKG}/bin/correct
+    dst: /usr/bin/correct
+    file_info:
+      mode: 0755
+  - src: ${CORRECT_PKG}/bin/correct-config
+    dst: /usr/bin/correct-config
+    file_info:
+      mode: 0755
+
+  - src: ${CORRECT_STAGE}/usr/share/doc/correct
+    dst: /usr/share/doc/correct
+    type: tree
+
+scripts:
+  preinstall: ${CORRECT_PKG}/scripts/preinstall.sh
+  postinstall: ${CORRECT_PKG}/scripts/postinstall.sh
+  preremove: ${CORRECT_PKG}/scripts/preremove.sh
+  postremove: ${CORRECT_PKG}/scripts/postremove.sh
+
+overrides:
+  deb:
+    depends:
+      - passwd          # useradd / groupadd
+  rpm:
+    depends:
+      - shadow-utils    # useradd / groupadd
+
+deb:
+  compression: xz
+
+rpm:
+  summary: CORRECT DICOM RT Structure Set Processor
+  group: Applications/Engineering
+  compression: zstd

@@ -1,0 +1,4 @@
+#!/bin/sh
+# Graphical CORRECT configuration editor (needs a desktop session or ssh -X).
+# Edits /etc/correct/config.yaml; run with sudo to save and to restart the service.
+exec /opt/correct/runtime/bin/python3 -m correct_admin.config_ui "$@"

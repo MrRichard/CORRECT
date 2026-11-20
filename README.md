@@ -18,10 +18,11 @@ graphical overlays, GSPS objects, and optional SEG exports.
 
 ## Installation
 
-CORRECT can be deployed four ways. **For a server, use the installer for your OS.**
+CORRECT can be deployed five ways. **For a server, use the package or installer for your OS.**
 
 | Method | Best for | Section |
 |---|---|---|
+| **Linux packages** (`correct_<version>-1_amd64.deb`, `correct-<version>-1.x86_64.rpm`) | Debian/Ubuntu, RHEL/Rocky/Alma/Fedora — offline, self-contained | [Linux Packages](#linux-packages-deb--rpm) |
 | **Installer script** (`install/install.sh`) | Debian/Ubuntu or RHEL/Rocky/Fedora servers | [Installer Script](#installer-script-recommended) |
 | **Windows installer** (`CORRECT-Setup-<version>.exe`) | Windows Server / Windows 10+ as a native service | [Windows Service](#windows-service) |
 | **Docker Compose** | Containerized / isolated deployments | [Docker Compose](#docker-compose) |
@@ -63,10 +64,25 @@ sudo systemctl status correct
 > The installer detects Fedora and uses the `python3.13` package automatically. See
 > [`docs/installation-fedora43.md`](docs/installation-fedora43.md) for details.
 
+### Linux Packages (.deb / .rpm)
+
+Download the package from the GitHub *Releases* page (or the **CORRECT-linux** artifact of the
+*Installers* GitHub Action). It bundles its own Python, so no internet access is needed.
+
+```bash
+sudo apt install ./correct_<version>-1_amd64.deb      # Debian / Ubuntu
+sudo dnf install ./correct-<version>-1.x86_64.rpm     # RHEL / Rocky / Alma / Fedora
+sudo nano /etc/correct/config.yaml                    # destination + site code
+sudo systemctl start correct                          # enabled at boot by the package
+```
+
+See [`docs/installation-linux-packages.md`](docs/installation-linux-packages.md), which covers
+paths, upgrades, removal and migrating from `install.sh` or the OVA.
+
 ### Windows Service
 
 Download `CORRECT-Setup-<version>.exe` from the GitHub *Releases* page, or take the
-**CORRECT-Setup** artifact from the *Windows installer* GitHub Action. Then:
+**CORRECT-Setup** artifact from the *Installers* GitHub Action. Then:
 
 1. **Run the installer.** Choose **all users** (service runs as Local System) or **only for me**
    (service runs as your account). It installs a private Python with every dependency, so no
@@ -254,7 +270,7 @@ All settings are managed through `config.yaml`. You can edit it by hand, or with
 editor `correct-config`:
 
 - **Windows:** Start Menu → CORRECT → CORRECT Configuration
-- **Linux:** `sudo /opt/correct/app/venv/bin/correct-config` (needs a desktop or `ssh -X`)
+- **Linux:** `sudo correct-config` (packages) or `sudo /opt/correct/app/venv/bin/correct-config` (`install.sh`); needs a desktop or `ssh -X`
 
 The editor validates input and keeps YAML comments. It can test the destination with a
 C-ECHO and start or restart the service.
@@ -286,6 +302,7 @@ See [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) for the complete reference.
 - [`docs/TECHNICAL_GUIDE.md`](docs/TECHNICAL_GUIDE.md) — technical architecture and deployment
 - [`docs/installation.md`](docs/installation.md) — RHEL/Rocky bare-metal installation guide
 - [`docs/installation-fedora43.md`](docs/installation-fedora43.md) — Fedora 43 installation guide
+- [`docs/installation-linux-packages.md`](docs/installation-linux-packages.md) — .deb / .rpm package installation guide
 - [`docs/installation-windows.md`](docs/installation-windows.md) — Windows service installation guide
 - [`docs/VM_UPDATE_GUIDE.md`](docs/VM_UPDATE_GUIDE.md) — VM update procedure (preserve local config)
 - [`docs/DISCLAIMER.md`](docs/DISCLAIMER.md) — security evaluation and risk disclosure

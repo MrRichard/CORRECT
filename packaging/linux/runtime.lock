@@ -1,0 +1,17 @@
+# Pinned inputs for the Linux .deb/.rpm build (read by build.sh).
+#
+# python-build-standalone "install_only" build: relocatable CPython (with tkinter), the
+# Linux twin of packaging/windows/runtime.lock — keep PBS_RELEASE / PYTHON_VERSION in step
+# with that file. SHA256 values come from the release's SHA256SUMS.
+PBS_RELEASE=20261021
+PYTHON_VERSION=3.11.17
+ASSET=cpython-3.11.17+20261021-x86_64-unknown-linux-gnu-install_only.tar.gz
+SHA256=7cc8d9dce9ea23c31267e7f244005c8979da04794b7737a3a30e62b03abeb120
+
+# Oldest glibc the packages support. Wheels are resolved for this manylinux tag (not the
+# build host's glibc), so the packages run on RHEL/Rocky 8+, Debian 10+, Ubuntu 20.04+.
+MANYLINUX=manylinux_2_28_x86_64
+
+# nFPM builds both the .deb and the .rpm from one staged tree.
+NFPM_VERSION=2.48.0
+NFPM_SHA256=6d7f9a28b2f397934403950fcbba83f598b08d02edbe79a0815b3b4897341750

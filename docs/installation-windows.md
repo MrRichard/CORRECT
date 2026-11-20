@@ -14,7 +14,7 @@ Installation has two stages:
 ## Getting the installer
 
 - **Releases:** download `CORRECT-Setup-<version>.exe` from the project's GitHub *Releases* page.
-- **Development builds:** go to GitHub → *Actions* → *Windows installer*, open a run, and download
+- **Development builds:** go to GitHub → *Actions* → *Installers*, open a run, and download
   the **CORRECT-Setup** artifact.
 - **Build it yourself on Windows:** install Inno Setup 6 (`winget install JRSoftware.InnoSetup`),
   then run `powershell -ExecutionPolicy Bypass -File packaging\windows\build.ps1`. The installer

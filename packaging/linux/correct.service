@@ -1,0 +1,36 @@
+[Unit]
+Description=CORRECT DICOM RT Structure Set Processor
+Documentation=https://github.com/MrRichard/CORRECT
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=correct
+Group=correct
+WorkingDirectory=/var/lib/correct
+Environment=PYTHONUNBUFFERED=1
+# Bytecode is precompiled in the package; never try to write it under /opt.
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/correct/runtime/bin/python3 /opt/correct/app/main.py --config /etc/correct/config.yaml
+Restart=on-failure
+RestartSec=10
+# Allow a study in progress to finish writing before SIGKILL.
+TimeoutStopSec=90
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=correct
+UMask=0027
+
+# Hardening that does not restrict where data may live (reports/working dirs are configurable,
+# e.g. a mounted share under /mnt). /usr, /boot and /etc are read-only for the service.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=full
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+
+[Install]
+WantedBy=multi-user.target

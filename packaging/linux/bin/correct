@@ -1,0 +1,9 @@
+#!/bin/sh
+# CORRECT command-line entry point (installed by the correct .deb/.rpm).
+# The service runs via systemd; use this for one-off foreground runs, e.g.
+#   sudo -u correct correct --config /etc/correct/config.yaml --debug
+case " $* " in
+  *" --config "*|*" --config="*|*" -h "*|*" --help "*) ;;
+  *) set -- --config /etc/correct/config.yaml "$@" ;;
+esac
+exec /opt/correct/runtime/bin/python3 /opt/correct/app/main.py "$@"
