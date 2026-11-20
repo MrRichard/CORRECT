@@ -85,8 +85,15 @@ def default_pid_mapping_file():
     return os.path.join(default_shared_dir(), "pid_mapping.json")
 
 
+# Linux: the .deb/.rpm packages keep config in /etc/correct; install.sh / the OVA use /opt.
+LINUX_PACKAGE_CONFIG = "/etc/correct/config.yaml"
+LINUX_SCRIPT_CONFIG = "/opt/correct/app/config.yaml"
+
+
 def default_config_path():
     """Where an installed CORRECT keeps its runtime config."""
     if IS_WINDOWS:
         return os.path.join(windows_data_root(), "config.yaml")
-    return "/opt/correct/app/config.yaml"
+    if os.path.exists(LINUX_PACKAGE_CONFIG):
+        return LINUX_PACKAGE_CONFIG
+    return LINUX_SCRIPT_CONFIG

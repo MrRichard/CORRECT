@@ -14,5 +14,6 @@ data/working/*
 data/logs/*
 data/output/*
 GEMINI.md
-.claudebuild/
+.claude
+build/
 dist/

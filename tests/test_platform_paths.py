@@ -10,7 +10,14 @@ def test_linux_defaults(monkeypatch):
     monkeypatch.setattr(pp, "IS_WINDOWS", False)
     assert pp.default_shared_dir() == "/mnt/shared"
     assert pp.default_working_dir() == "~/CORRECT_working"
+    monkeypatch.setattr(pp.os.path, "exists", lambda p: False)
     assert pp.default_config_path() == "/opt/correct/app/config.yaml"
+
+
+def test_linux_package_config_preferred(monkeypatch):
+    monkeypatch.setattr(pp, "IS_WINDOWS", False)
+    monkeypatch.setattr(pp.os.path, "exists", lambda p: p == pp.LINUX_PACKAGE_CONFIG)
+    assert pp.default_config_path() == "/etc/correct/config.yaml"
 
 
 def test_windows_defaults(monkeypatch):

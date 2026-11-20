@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "correct"
-version = "0.1.0"
+dynamic = ["version"]
 description = "CORRECT DICOM RT Structure Processor"
 requires-python = ">=3.11"
 dependencies = [
@@ -32,5 +32,10 @@ include = ["netrt_core*", "correct_admin*"]
 
 [tool.setuptools]
 py-modules = ["main", "DicomAnonymizer"]
+
+[tool.setuptools.dynamic]
+# Single source of truth for the version: also read by the Windows and Linux package builds.
+version = {attr = "netrt_core.__version__"}
+
 [tool.setuptools.package-data]
 correct_admin = ["templates/*.yaml"]
