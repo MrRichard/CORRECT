@@ -219,3 +219,31 @@ def test_main_elevate_reuses_caller_result_file(tmp_path, monkeypatch):
     assert rc == 0
     assert recorded["args"] == ["remove-service"]
     assert recorded["result_file"] == str(result)
+
+
+# ── data-root ACLs and firewall scope ───────────────────────────────────────
+def _capture_run(monkeypatch):
+    calls = []
+    monkeypatch.setattr(setup_tasks, "_run", lambda cmd: calls.append(cmd))
+    return calls
+
+
+def test_harden_data_root_takes_ownership_and_resets_before_granting(monkeypatch):
+    # A standard user can pre-create ProgramData\CORRECT and would own it; ownership must
+    # move to Administrators and existing ACEs be reset before the restrictive grant.
+    calls = _capture_run(monkeypatch)
+    setup_tasks.harden_data_root(r"C:\ProgramData\CORRECT")
+    assert [c[2] for c in calls] == ["/setowner", "/reset", "/inheritance:r"]
+    assert calls[0][3] == f"*{setup_tasks.ADMINISTRATORS_SID}" and "/T" in calls[0]
+    assert "/T" in calls[1]
+    grants = [calls[2][i + 1] for i, a in enumerate(calls[2]) if a == "/grant:r"]
+    assert grants == [f"*{setup_tasks.ADMINISTRATORS_SID}:(OI)(CI)F", f"*{setup_tasks.SYSTEM_SID}:(OI)(CI)F"]
+
+
+def test_firewall_rule_not_opened_on_public_profile(monkeypatch):
+    calls = _capture_run(monkeypatch)
+    monkeypatch.setattr(setup_tasks, "remove_firewall_rule", lambda: None)
+    setup_tasks.set_firewall_rule(11112)
+    (cmd,) = calls
+    assert "profile=domain,private" in cmd and "profile=any" not in cmd
+    assert "localport=11112" in cmd

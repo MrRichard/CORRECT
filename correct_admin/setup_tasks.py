@@ -67,7 +67,15 @@ def init_config(data_dir=None, scope=None, port=None):
 
 
 def harden_data_root(data_dir):
-    """Remove inherited ACEs (ProgramData lets Users create files) and grant only Admins + SYSTEM."""
+    """Lock the data root down to Administrators + SYSTEM.
+
+    ProgramData lets any user create a folder, and the creator owns it. A standard user
+    could pre-create ProgramData\\CORRECT, so: take ownership for Administrators, reset
+    every ACL in the tree (drops ACEs the creator added), then cut inheritance on the
+    root and grant only Admins + SYSTEM, which the children inherit.
+    """
+    _run(["icacls", data_dir, "/setowner", f"*{ADMINISTRATORS_SID}", "/T", "/C", "/Q"])
+    _run(["icacls", data_dir, "/reset", "/T", "/C", "/Q"])
     _run(["icacls", data_dir, "/inheritance:r",
           "/grant:r", f"*{ADMINISTRATORS_SID}:(OI)(CI)F",
           "/grant:r", f"*{SYSTEM_SID}:(OI)(CI)F", "/Q"])
@@ -83,7 +91,8 @@ def firewall_rule_exists():
 def set_firewall_rule(port):
     remove_firewall_rule()
     _run(["netsh", "advfirewall", "firewall", "add", "rule", f"name={FIREWALL_RULE}", "dir=in",
-          "action=allow", "protocol=TCP", f"localport={int(port)}", "profile=any"])
+          # Not "any": a laptop or VM that joins a Public network must not expose DICOM.
+          "action=allow", "protocol=TCP", f"localport={int(port)}", "profile=domain,private"])
 
 
 def remove_firewall_rule():
