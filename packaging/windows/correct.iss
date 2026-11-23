@@ -187,6 +187,7 @@ end;
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   DataDir, ResultFile, Content, Msg: String;
+  RawContent: AnsiString;  // LoadStringFromFile's var parameter is AnsiString; the file is ASCII JSON
   Code: Integer;
   HelperFailed: Boolean;
 begin
@@ -211,8 +212,9 @@ begin
     else if Code <> 0 then
     begin
       HelperFailed := True;
-      if LoadStringFromFile(ResultFile, Content) then
+      if LoadStringFromFile(ResultFile, RawContent) then
       begin
+        Content := String(RawContent);
         Msg := JsonMessageValue(Content);
         if Pos('"ok": true', Content) > 0 then
           HelperFailed := False;  // the helper reports success on disk; trust it
