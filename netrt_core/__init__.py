@@ -6,7 +6,7 @@ This package contains the core modules for the CORRECT application,
 refactored for improved modularity and maintainability.
 """
 
-__version__ = "0.3.0"
+__version__ = "0.3.0-alpha.1"
 
 # rt-utils <= 1.2.7 is missing "import warnings" in rt_utils/rtstruct_builder.py,
 # which makes its warn_only path raise NameError instead of warning. Applied here
