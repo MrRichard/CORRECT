@@ -319,6 +319,7 @@ See [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) for the complete reference.
 - Configure disk-space monitoring for working directories
 - Set up log rotation for application and transaction logs
 - Implement network security controls for DICOM communications
+- Read [`docs/DISCLAIMER.md`](docs/DISCLAIMER.md) (risks, deployment checklist, latest audit) and [`SECURITY.md`](SECURITY.md) (how to report a vulnerability)
 - Review anonymization settings (`apply_site_code`, `apply_anonymization_rules`) to meet your privacy requirements
 - Monitor the quarantine directory for failed studies (cleared automatically on startup)
 
