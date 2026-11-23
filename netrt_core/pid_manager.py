@@ -5,6 +5,8 @@ import threading
 from datetime import datetime
 from hashlib import sha256
 
+from .platform_paths import default_pid_mapping_file
+
 logger = logging.getLogger(__name__)
 
 class PIDManager:
@@ -19,7 +21,7 @@ class PIDManager:
         """
         self.config = config
         self.site_code = config.get("site_code", "SITE")
-        self.mapping_file = config.get("pid_mapping_file", "/mnt/shared/pid_mapping.json")
+        self.mapping_file = config.get("pid_mapping_file") or default_pid_mapping_file()
         self.use_consistent_pid = config.get("use_consistent_pid", True)
         
         # Thread lock for file operations
@@ -60,8 +62,8 @@ class PIDManager:
             with open(temp_file, 'w') as f:
                 json.dump(self.mapping, f, indent=2)
             
-            # Atomic rename
-            os.rename(temp_file, self.mapping_file)
+            # Atomic replace (os.rename fails on Windows when the target exists)
+            os.replace(temp_file, self.mapping_file)
             logger.debug(f"Saved PID mapping with {len(self.mapping)} entries")
         except Exception as e:
             logger.error(f"Failed to save PID mapping to {self.mapping_file}: {e}")

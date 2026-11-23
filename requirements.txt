@@ -1,10 +1,10 @@
 contourpy==1.3.1
 cycler==0.12.1
+# Python 2 backport; no-op on 3.11, but rt-utils declares it, so keep it pinned.
 dataclasses==0.6
 fonttools==4.60.2
 highdicom==0.24.0
 imageio==2.37.0
-ipaddress==1.0.23
 kiwisolver==1.4.8
 lazy_loader==0.4
 matplotlib==3.10.0
@@ -12,15 +12,17 @@ networkx==3.4.2
 numpy==2.2.2
 opencv-python==4.11.0.86
 packaging==24.2
-pillow==12.2.0
+pillow==13.0.0
 pyaml==25.1.0
 pydicom==3.0.2
 pyjpegls==1.4.0
 pynetdicom==2.0.2
 pyparsing==3.2.1
 python-dateutil==2.9.0.post0
+pywin32==311; sys_platform == "win32"
 PyWavelets==1.8.0
 PyYAML==6.0.2
+ruamel.yaml==0.18.16
 rt-utils==1.2.7
 scikit-image==0.25.1
 scipy==1.15.1

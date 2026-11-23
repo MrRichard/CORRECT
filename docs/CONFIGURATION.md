@@ -2,6 +2,27 @@
 
 Configuration is managed through a YAML file (default: `config.yaml`). If the file is missing or invalid, default values are used and a new configuration file is created.
 
+## Editing the configuration
+
+- **By hand:** edit the YAML in any editor, then restart the service.
+- **Graphical editor:** `correct-config [--config PATH]`.
+  - Default path on Windows: `C:\ProgramData\CORRECT\config.yaml`
+  - Default path on Linux: `/opt/correct/app/config.yaml`
+  - The `CORRECT_CONFIG` environment variable overrides the default.
+  - It edits the settings below on tabs.
+  - It validates ports, AE titles (16 characters or fewer), hosts and absolute paths.
+  - It keeps comments and quoting, and writes `config.yaml.bak` before each save.
+  - **Test C-ECHO** checks the destination. The **Service** tab starts, stops and restarts the
+    service, and on Windows changes its logon account.
+  - Saving needs Administrator rights (Windows) or root (Linux). Without them, the editor opens
+    read-only.
+
+**Platform defaults.** When `directories.*`, `reporting.output_directory` or
+`anonymization.pid_mapping_file` are left out of the config, they default to:
+
+- **Linux:** `~/CORRECT_working`, `~/CORRECT_logs` and `/mnt/shared`
+- **Windows:** `C:\ProgramData\CORRECT\{working,logs,shared}`
+
 ## Configuration Structure
 
 ### DICOM Listener

@@ -7,6 +7,8 @@ import threading
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
+from .platform_paths import default_logs_dir, default_working_dir
+
 logger = logging.getLogger(__name__)
 
 class NewStudyEventHandler(FileSystemEventHandler):
@@ -66,7 +68,8 @@ class NewStudyEventHandler(FileSystemEventHandler):
         return (
             os.path.isdir(path)
             and os.path.basename(path).startswith("UID_")
-            and os.path.dirname(path) == self.fsm.working_dir
+            and os.path.normcase(os.path.dirname(os.path.abspath(path)))
+            == os.path.normcase(self.fsm.working_dir)
         )
 
     def _get_study_uid_from_path(self, path):
@@ -288,10 +291,13 @@ class FileSystemManager:
             study_processor_callback (callable): Callback for when a new study is ready.
         """
         self.config = config
-        self.working_dir = os.path.expanduser(config.get("directories", {}).get("working", "~/CORRECT_working"))
+        # Normalise to an absolute path without trailing separators so path comparisons
+        # against watchdog event paths work on Windows as well as Linux.
+        self.working_dir = os.path.abspath(os.path.expanduser(
+            config.get("directories", {}).get("working") or default_working_dir()))
         self.quarantine_subdir = config.get("directories", {}).get("quarantine_subdir", "quarantine")
         self.quarantine_dir = os.path.join(self.working_dir, self.quarantine_subdir)
-        self.logs_dir = os.path.expanduser(config.get("directories", {}).get("logs", "~/CORRECT_logs"))
+        self.logs_dir = os.path.expanduser(config.get("directories", {}).get("logs") or default_logs_dir())
 
         # Add a lock dictionary to track processing studies
         self.processing_locks = {}

@@ -1,0 +1,260 @@
+name: Installers
+
+# Builds and tests every installer on each push / PR:
+#   Windows  CORRECT-Setup-<ver>.exe        (packaging/windows)
+#   Linux    correct_<ver>-1_amd64.deb      (packaging/linux)
+#            correct-<ver>-1.x86_64.rpm
+# A pushed tag v<ver> (must equal netrt_core.__version__) also creates a DRAFT GitHub
+# release with all three + SHA256SUMS; review it on GitHub and click Publish.
+
+on:
+  push:
+    branches: [master, windows_development]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt -r requirements-dev.txt
+      - run: python -m pytest -q
+
+  build:
+    runs-on: windows-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version
+        id: version
+        shell: pwsh
+        run: |
+          $init = Get-Content netrt_core/__init__.py -Raw
+          if ($init -match '__version__\s*=\s*"([^"]+)"') { "version=$($Matches[1])" >> $env:GITHUB_OUTPUT }
+
+      - name: Cache Python runtime download
+        uses: actions/cache@v4
+        with:
+          path: build/windows/cache
+          key: pbs-${{ hashFiles('packaging/windows/runtime.lock') }}
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) {
+            choco install innosetup -y --no-progress
+          }
+
+      - name: Build installer
+        shell: pwsh
+        run: ./packaging/windows/build.ps1
+
+      - name: Run tests with the bundled runtime
+        shell: pwsh
+        run: |
+          $py = "build/windows/stage/runtime/python.exe"
+          & $py -m pip install --disable-pip-version-check pytest==9.1.1
+          & $py -m pytest -q
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CORRECT-Setup
+          path: dist/CORRECT-Setup-*.exe
+          if-no-files-found: error
+
+  smoke-install:
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: CORRECT-Setup
+          path: dist
+
+      - name: Install for all users (silent)
+        shell: pwsh
+        run: |
+          $exe = (Get-ChildItem dist/CORRECT-Setup-*.exe).FullName
+          $p = Start-Process $exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/ALLUSERS','/LOG=install.log' -Wait -PassThru
+          Get-Content install.log -Tail 20
+          if ($p.ExitCode -ne 0) { throw "installer exit code $($p.ExitCode)" }
+          Get-Content "$env:ProgramFiles\CORRECT\install.json"
+          if (Get-Service CORRECT -ErrorAction SilentlyContinue) { throw "installer must not create the service" }
+
+      - name: First-run setup, install service, C-ECHO
+        shell: pwsh
+        run: |
+          $py = "$env:ProgramFiles\CORRECT\runtime\python.exe"
+          & $py -m correct_admin.service_control init-config
+          if ($LASTEXITCODE -ne 0) { throw "init-config failed" }
+          & $py -m correct_admin.service_control install-service --scope machine --account localsystem
+          if ($LASTEXITCODE -ne 0) { throw "install-service failed" }
+          Get-Service CORRECT | Format-List Name, Status, StartType
+          $ok = $false
+          foreach ($i in 1..30) {
+            & $py -c "from pynetdicom import AE; from pynetdicom.sop_class import Verification; ae=AE(); ae.add_requested_context(Verification); a=ae.associate('127.0.0.1', 11112, ae_title='CORRECT'); import sys; ok=a.is_established and a.send_c_echo().Status==0; a.release() if a.is_established else None; sys.exit(0 if ok else 1)"
+            if ($LASTEXITCODE -eq 0) { $ok = $true; break }
+            Start-Sleep -Seconds 2
+          }
+          if (-not $ok) {
+            Get-Content "$env:ProgramData\CORRECT\logs\application.log" -ErrorAction SilentlyContinue -Tail 50
+            Get-WinEvent -LogName Application -MaxEvents 20 | Format-List TimeCreated, ProviderName, Message
+            throw "service did not answer C-ECHO"
+          }
+          Write-Host "C-ECHO OK"
+
+      - name: Restart via service control, then uninstall
+        shell: pwsh
+        run: |
+          $py = "$env:ProgramFiles\CORRECT\runtime\python.exe"
+          & $py -m correct_admin.service_control restart
+          if ($LASTEXITCODE -ne 0) { throw "restart failed" }
+          $p = Start-Process "$env:ProgramFiles\CORRECT\unins000.exe" -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait -PassThru
+          Start-Sleep -Seconds 5
+          if (Get-Service CORRECT -ErrorAction SilentlyContinue) { throw "service still registered after uninstall" }
+          if (Test-Path "$env:ProgramFiles\CORRECT\runtime") { throw "program files left behind" }
+          if (-not (Test-Path "$env:ProgramData\CORRECT\config.yaml")) { throw "silent uninstall must keep config" }
+          Write-Host "uninstall OK"
+
+      - name: Install for current user only (silent), then uninstall
+        shell: pwsh
+        run: |
+          $exe = (Get-ChildItem dist/CORRECT-Setup-*.exe).FullName
+          $p = Start-Process $exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/CURRENTUSER' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "installer exit code $($p.ExitCode)" }
+          $root = "$env:LOCALAPPDATA\Programs\CORRECT"
+          Get-Content "$root\install.json"
+          & "$root\runtime\python.exe" -c "from netrt_core.platform_paths import install_scope, default_config_path; print(install_scope(), default_config_path()); assert install_scope() == 'user'"
+          if ($LASTEXITCODE -ne 0) { throw "per-user install metadata wrong" }
+          $p = Start-Process "$root\unins000.exe" -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait -PassThru
+          Start-Sleep -Seconds 3
+          if (Test-Path "$root\runtime") { throw "per-user files left behind" }
+
+  linux-packages:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Python runtime + nFPM downloads
+        uses: actions/cache@v4
+        with:
+          path: build/linux/cache
+          key: linux-${{ hashFiles('packaging/linux/runtime.lock') }}
+
+      - name: Build .deb and .rpm
+        run: packaging/linux/build.sh
+
+      - name: Run tests with the bundled runtime
+        run: |
+          py=build/linux/stage/opt/correct/runtime/bin/python3
+          $py -m pip install --disable-pip-version-check -q pytest==9.1.1
+          $py -m pytest -q
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CORRECT-linux
+          path: |
+            dist/correct_*.deb
+            dist/correct-*.rpm
+          if-no-files-found: error
+
+  linux-package-test:
+    needs: linux-packages
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [ubuntu:22.04, ubuntu:24.04, debian:11, debian:12,
+                rockylinux:8, rockylinux:9, almalinux:10, fedora:43]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: CORRECT-linux
+          path: dist
+      - name: Install, run, C-ECHO, upgrade, remove in ${{ matrix.image }}
+        run: |
+          case "${{ matrix.image }}" in ubuntu*|debian*) pkg=$(ls dist/correct_*.deb);; *) pkg=$(ls dist/correct-*.rpm);; esac
+          docker run --rm -v "$PWD:/src:ro" "${{ matrix.image }}" sh /src/packaging/linux/test-package.sh "/src/$pkg"
+
+  linux-systemd-test:
+    needs: linux-packages
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: rockylinux:9
+            prep: dnf -y -q install systemd procps-ng
+            pkg: rpm
+          - image: ubuntu:24.04
+            prep: apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq systemd systemd-sysv procps
+            pkg: deb
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: CORRECT-linux
+          path: dist
+      - name: Unit + maintainer scripts under systemd (${{ matrix.image }})
+        run: |
+          printf 'FROM %s\nRUN %s\nCMD ["/sbin/init"]\n' "${{ matrix.image }}" "${{ matrix.prep }}" > Dockerfile.systemd
+          docker build -q -t correct-systemd -f Dockerfile.systemd .
+          c=$(docker run -d --privileged --cgroupns=host -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
+                --tmpfs /run --tmpfs /tmp -v "$PWD:/src:ro" correct-systemd)
+          sleep 5
+          pkg=$(ls dist/*.${{ matrix.pkg }})
+          docker exec "$c" sh /src/packaging/linux/test-systemd.sh "/src/$pkg"
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build, smoke-install, linux-tests, linux-packages, linux-package-test, linux-systemd-test]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tag must match netrt_core.__version__
+        run: |
+          version=$(sed -n 's/^__version__ *= *"\([^"]*\)".*/\1/p' netrt_core/__init__.py)
+          if [ "${GITHUB_REF_NAME}" != "v${version}" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} does not match netrt_core.__version__ ${version}"
+            exit 1
+          fi
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: CORRECT-Setup
+          path: dist
+      - uses: actions/download-artifact@v4
+        with:
+          name: CORRECT-linux
+          path: dist
+
+      - name: Checksums
+        run: cd dist && sha256sum CORRECT-Setup-*.exe correct_*.deb correct-*.rpm > SHA256SUMS && cat SHA256SUMS
+
+      # Draft: nothing is public until someone presses Publish on the release page.
+      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65  # v2.6.2
+        with:
+          draft: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          generate_release_notes: true
+          files: |
+            dist/CORRECT-Setup-*.exe
+            dist/correct_*.deb
+            dist/correct-*.rpm
+            dist/SHA256SUMS

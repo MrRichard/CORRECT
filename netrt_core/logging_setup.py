@@ -2,8 +2,21 @@ import logging
 import os
 import sys
 
+from .platform_paths import default_logs_dir
+
 # Define a specific logger for transaction events
 TRANSACTION_LOGGER_NAME = "transaction"
+
+def _console_handlers():
+    """Console handler list; empty when there is no usable stdout.
+
+    Under a Windows service (pythonservice.exe) or pythonw, sys.stdout can be
+    None, and a StreamHandler on it would raise on every record.
+    """
+    if sys.stdout is None:
+        return [logging.NullHandler()]
+    return [logging.StreamHandler(sys.stdout)]
+
 
 def setup_logging(config):
     """Sets up logging for the application based on the provided configuration."""
@@ -13,7 +26,7 @@ def setup_logging(config):
     
     log_level = getattr(logging, log_level_str, logging.INFO)
     
-    logs_dir = os.path.expanduser(config.get("directories", {}).get("logs", "~/CORRECT_logs"))
+    logs_dir = os.path.expanduser(config.get("directories", {}).get("logs") or default_logs_dir())
     app_log_filename = log_config.get("application_log_file", "application.log")
     trans_log_filename = log_config.get("transaction_log_file", "transaction.log")
 
@@ -24,11 +37,11 @@ def setup_logging(config):
         os.makedirs(logs_dir, exist_ok=True)
     except OSError as e:
         # Fallback to console logging if directory creation fails
-        logging.basicConfig(level=log_level, format=log_format_str, stream=sys.stdout)
+        logging.basicConfig(level=log_level, format=log_format_str, handlers=_console_handlers())
         logging.error(f"Could not create logs directory {logs_dir}: {e}. Falling back to console logging.")
         return
 
-    logging.basicConfig(level=log_level, format=log_format_str, handlers=[logging.StreamHandler(sys.stdout)])
+    logging.basicConfig(level=log_level, format=log_format_str, handlers=_console_handlers())
 
     # Route warnings.warn() output into the logging system so library warnings
     # (e.g. rt-utils' RTSTRUCT series reference check) land in application.log

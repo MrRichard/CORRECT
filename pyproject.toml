@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "correct"
-version = "0.1.0"
+dynamic = ["version"]
 description = "CORRECT DICOM RT Structure Processor"
 requires-python = ">=3.11"
 dependencies = [
@@ -15,14 +15,27 @@ dependencies = [
     "numpy",
     "watchdog",
     "PyYAML",
+    "ruamel.yaml",
+    "pywin32; sys_platform == 'win32'",
 ]
 
 [project.scripts]
 correct = "main:main"
 
+[project.gui-scripts]
+# Graphical configuration editor (runs without a console window on Windows).
+correct-config = "correct_admin.config_ui:main"
+
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["netrt_core*"]
+include = ["netrt_core*", "correct_admin*"]
 
 [tool.setuptools]
-py-modules = ["main"]
+py-modules = ["main", "DicomAnonymizer"]
+
+[tool.setuptools.dynamic]
+# Single source of truth for the version: also read by the Windows and Linux package builds.
+version = {attr = "netrt_core.__version__"}
+
+[tool.setuptools.package-data]
+correct_admin = ["templates/*.yaml"]

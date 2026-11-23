@@ -15,3 +15,5 @@ data/logs/*
 data/output/*
 GEMINI.md
 .claude
+build/
+dist/

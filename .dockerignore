@@ -1,3 +1,27 @@
+# Keep the build context (and so the image) to what the app needs at runtime.
+# Secrets / local state
+.env
+.env.*
+!env.example
+*.pem
+*.key
+pid_mapping.json
+# VCS, tooling, caches
+.git/
+.github/
 .venv/
-netrt.service.example
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+# Build outputs (installers, staged runtimes, downloaded tools)
+build/
+dist/
+packaging/
+install/
+# Not needed in the image
+tests/
+docs/
 *.md
+netrt.service.example

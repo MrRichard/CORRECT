@@ -2,6 +2,13 @@ import yaml
 import os
 import logging
 
+from .platform_paths import (
+    default_logs_dir,
+    default_pid_mapping_file,
+    default_shared_dir,
+    default_working_dir,
+)
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_CONFIG = {
@@ -17,8 +24,8 @@ DEFAULT_CONFIG = {
         "ae_title": "DEST_AET"
     },
     "directories": {
-        "working": "~/CORRECT_working",
-        "logs": "~/CORRECT_logs",
+        "working": default_working_dir(),
+        "logs": default_logs_dir(),
         "quarantine_subdir": "quarantine"
     },
     "logging": {
@@ -40,7 +47,7 @@ DEFAULT_CONFIG = {
         "apply_site_code": True,
         "apply_anonymization_rules": True,
         "site_code": "SITE",
-        "pid_mapping_file": "/mnt/shared/pid_mapping.json",
+        "pid_mapping_file": default_pid_mapping_file(),
         "study_description": "CORRECT Study Treatment Plan",
         "rules": {
             "remove_tags": [
@@ -91,6 +98,9 @@ DEFAULT_CONFIG = {
     "watcher": {
         "debounce_interval_seconds": 60,
         "min_file_count_for_processing": 2
+    },
+    "reporting": {
+        "output_directory": default_shared_dir()
     }
 }
 

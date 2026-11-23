@@ -19,6 +19,9 @@ The following components were reviewed by reading the source code. This is not a
 | `netrt_core/config_loader.py` | Reads and applies all runtime configuration |
 | `netrt_core/file_system_manager.py` | Writes incoming DICOM files to disk and monitors for study completion before triggering processing |
 | `config.yaml` | Deployment configuration, including the destination PACS IP address, port, and AE title |
+| `correct_admin/` | Windows service, service-control CLI, configuration UI, and first-run setup (data-folder permissions, firewall rule) |
+| `packaging/windows/` | Inno Setup installer and its build script (bundled Python runtime, download verification) |
+| `packaging/linux/` | .deb/.rpm build, maintainer scripts, launcher scripts, and the systemd unit |
 
 **What was NOT evaluated:** network infrastructure, operating system hardening, Docker host security, PACS configuration, or any component outside the list above.
 
@@ -67,39 +70,65 @@ Even with anonymization enabled, the transmitted data contains imaging series, s
 - [ ] **Protect `pid_mapping.json`.** Restrict filesystem permissions on the output directory (the `output` volume mount). Back it up securely. Never include it in data exports, repositories, or file transfers.
 - [ ] **Treat the logs directory as sensitive.** Apply access controls and a retention policy to `application.log` and `transaction.log`. Study Instance UIDs in these files are patient-linked.
 - [ ] **Confirm network segmentation.** Because the DICOM listener has no built-in authentication, network isolation is the primary access control. Verify the host is not reachable from untrusted network segments.
+- [ ] **Windows: install into the default `Program Files` location and prefer the virtual service account.** See *Known limitations* below. A custom install folder can be writable by every user, and LocalSystem gives the service full control of the machine.
+
+---
+
+## Installer and Service Review (2026-11, v0.3.0-alpha.1)
+
+The Windows installer, the Windows service and the Linux packages were reviewed by reading their source code. This was also not a penetration test.
+
+**Fixed in this release**
+
+1. **Data folder takeover on Windows.** A standard user could create `C:\ProgramData\CORRECT` before an administrator ran first-time setup. The user would then own the folder and could restore their own access after setup had locked it down. Setup now gives ownership to Administrators and resets every permission in the folder tree before granting access only to Administrators and SYSTEM. **If `config.yaml` already existed in that folder before your first setup, check its destination and folder paths before you start the service.**
+2. **Windows firewall rule open on Public networks.** The inbound rule for the DICOM port applied to all network profiles. It now applies only to the Domain and Private profiles.
+3. **`sudo correct-config` could run planted code as root (Linux).** The launcher started Python in a way that searched the current directory first. Starting `sudo correct-config` from a directory holding a planted module ran that module as root. The launcher now runs Python in isolated mode (`-I`).
+
+**Known limitations in this alpha** (accepted for now and tracked for a later release)
+
+- **The Windows service runs as LocalSystem by default.** The service accepts DICOM data from the network, so a flaw in parsing that data would give full control of the machine. If your data folders are on local disks, choose the *virtual account* (`NT SERVICE\CORRECT`) on the Service tab, or install with `install-service --account virtual`.
+- **Custom install folders on Windows.** An "all users" install into the default `Program Files` folder is admin-only. Installing into a folder such as `C:\CORRECT` inherits that drive's permissions, which commonly let any signed-in user modify files. The service then runs those files as SYSTEM. Use the default location.
+- **"Only for me" installs and administrator approval.** For this install type, the administrator prompt (UAC) launches Python from the user's own profile, which that user can modify. If the person approving the prompt is a different administrator, use an "all users" install.
+- **The systemd unit's sandboxing is partial.** `NoNewPrivileges`, `ProtectSystem=full` and `UMask=0027` are set. Further sandboxing options (`ProtectHome`, `PrivateDevices`, `RestrictAddressFamilies`, `SystemCallFilter`) are not set yet.
+- **Dependency hashes are not checked at install time.** Package versions are pinned exactly, but pip does not verify their hashes (`--require-hashes`).
+
+**Positive findings**
+
+- The Python runtime and the nFPM packaging tool are verified against pinned SHA256 hashes before they are used.
+- Every call to `sc.exe`, `icacls`, `netsh` and `systemctl` passes its arguments as a list (`shell=True` is never used), and the PowerShell commands in the installer contain no user-supplied values.
+- Service account passwords are never passed on a command line.
+- On Linux, the service runs as a dedicated `correct` system user with no login shell. Data and log folders are `0750 correct:correct`, and `/etc/correct/config.yaml` is `0640 root:correct` and kept on upgrade.
+- Uninstall only removes fixed paths and never deletes patient data automatically.
+- The Docker image now runs on a supported Debian release (bookworm) and contains only runtime files.
 
 ---
 
 ## Dependency Security Audit
 
-Python dependencies were audited using [pip-audit](https://github.com/pypa/pip-audit), an open-source tool maintained by the Python Packaging Authority (PyPA). It checks installed packages against the Open Source Vulnerabilities (OSV) database.
+**Most recent audit: 2026-11-23, release v0.3.0-alpha.1.** The audit covered everything the installers and the Docker image ship, not just `requirements.txt`.
 
-```
-pip-audit -r requirements.txt
-```
-
-### Full Dependency List at Time of Review
-
-| Package | Version | Package | Version |
+| Scope | Tool | Result before fixes | Result after fixes |
 |---|---|---|---|
-| contourpy | 1.3.1 | pyaml | 25.1.0 |
-| cycler | 0.12.1 | pydicom | 3.0.2 |
-| dataclasses | 0.6 | pyjpegls | 1.4.0 |
-| fonttools | 4.60.2 | pynetdicom | 2.0.2 |
-| highdicom | 0.24.0 | pyparsing | 3.2.1 |
-| imageio | 2.37.0 | python-dateutil | 2.9.0.post0 |
-| ipaddress | 1.0.23 | PyWavelets | 1.8.0 |
-| kiwisolver | 1.4.8 | PyYAML | 6.0.2 |
-| lazy_loader | 0.4 | rt-utils | 1.2.7 |
-| matplotlib | 3.10.0 | scikit-image | 0.25.1 |
-| networkx | 3.4.2 | scipy | 1.15.1 |
-| numpy | 2.2.2 | six | 1.17.0 |
-| opencv-python | 4.11.0.86 | tifffile | 2025.1.10 |
-| packaging | 24.2 | tqdm | 4.67.1 |
-| pillow | 12.2.0 | typing_extensions | 4.12.2 |
-| | | watchdog | 6.0.0 |
+| Pinned Python packages (`requirements.txt`) | pip-audit 2.10.1 (OSV / PyPI advisory data) | **67 known vulnerabilities, all in pillow 12.2.0** | No known vulnerabilities |
+| Python packages as shipped in the .deb/.rpm (34 packages, including pip) | pip-audit 2.10.1 | — | No known vulnerabilities |
+| Development dependencies (`pytest`) | pip-audit 2.10.1 | No known vulnerabilities | No known vulnerabilities |
+| Bundled CPython (Windows and Linux installers) | python.org security advisories | 3.11.17 | **3.11.18** (security-only release) |
+| Docker image | Trivy 0.76.2, HIGH/CRITICAL, fixable only | Base image `python:3.11-slim-bullseye` (Debian 11, end of life) no longer builds | Debian 12 OS packages: 0 findings. Python: 1 false positive (below) |
 
-CVE databases are updated continuously. Re-run `pip-audit -r requirements.txt` periodically and after any dependency change.
+**Findings and resolutions**
+
+| Finding | Resolution |
+|---|---|
+| pillow 12.2.0: 67 advisories (25 fixed in 12.3.0, 42 in 13.0.0). CORRECT does not import Pillow directly; it comes in through matplotlib, imageio and scikit-image. | **Fixed:** pinned `pillow==13.0.0`. |
+| CPython 3.11.17: `ssl` accepted certificates from compromised eMudhra intermediate CAs (CVE-2026-115557); the bundled expat library had vulnerabilities (CVE-2026-77214, CVE-2026-102633); `tarfile` link filter (CVE-2026-114583); `mimetypes` on Windows (CVE-2024-3220). | **Fixed:** both installers bundle CPython 3.11.18 (python-build-standalone 20261123), with SHA256 hashes taken from the release's `SHA256SUMS`. |
+| Docker base image was Debian 11: no further security updates, and `apt-get` fails during the build. | **Fixed:** changed to `python:3.11-slim-bookworm`. |
+| The Docker base image ships setuptools 70.3.0 (CVE-2025-47273), with bundled copies of wheel (CVE-2026-24049) and jaraco.context (CVE-2026-23949). | **Fixed:** setuptools and wheel are upgraded while the image is built. |
+| The Docker build copied the whole working tree into the image, including `.git`, about 1.3 GB of local build output, and any local `.env` file. | **Fixed:** `.dockerignore` now excludes version control files, secrets, caches, build output, tests and docs. |
+| Trivy still reports setuptools 70.3.0 in the image. | **Not applicable:** this entry comes from pip's vendored SBOM (`pip/_vendor/bom.cdx.json`). pip vendors only `pkg_resources` from setuptools, and the vulnerable `package_index` module is not included. |
+| `ipaddress==1.0.23` is a Python 2 backport that nothing imports. | **Removed.** (`dataclasses==0.6` is also a no-op on Python 3.11, but rt-utils declares it as a dependency, so it stays pinned.) |
+| Debian 12 OS packages: HIGH/CRITICAL advisories with no fix published yet. | **Accepted:** these will be picked up automatically when the image is rebuilt after Debian publishes fixes. |
+
+The current package list is [`requirements.txt`](../requirements.txt). It is not copied here so the two cannot drift apart. To re-run the audit, see the commands in [`SECURITY.md`](../SECURITY.md#how-dependencies-are-audited). Vulnerability databases change daily, so re-run the audit before every release and after any dependency change.
 
 ---
 
