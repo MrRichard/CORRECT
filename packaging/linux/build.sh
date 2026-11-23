@@ -181,4 +181,5 @@ for fmt in $FORMATS; do
   step "Packaging $fmt"
   "$NFPM" package --config "$NFPM_CFG" --packager "$fmt" --target "$OUT_DIR/"
 done
-ls -lh "$OUT_DIR"/correct[_-]"$VERSION"* 2>/dev/null
+# nFPM (semver) writes a pre-release 0.3.0-alpha.1 as 0.3.0~alpha.1 in file names.
+ls -lh "$OUT_DIR"/correct[_-]"${VERSION//-/\~}"*

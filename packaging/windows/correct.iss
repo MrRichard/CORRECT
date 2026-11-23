@@ -229,8 +229,8 @@ begin
       except
       end;
       if not UninstallSilent then
-        MsgBox('CORRECT could not remove its Windows service:'#13#10#13#10 + Msg +
-               #13#10#13#10 + 'The service will keep running. Remove it later from the ' +
+        MsgBox('CORRECT could not remove its Windows service:'#13#10#13#10 + Msg + #13#10#13#10 +
+               'The service will keep running. Remove it later from the ' +
                'CORRECT Configuration app (Service tab > Remove service).',
                mbCriticalError, MB_OK);
     end;
