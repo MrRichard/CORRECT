@@ -60,10 +60,18 @@ def run_elevated(executable, parameters, cwd=None):
         handle.Close()
 
 
-def run_service_command(args):
-    """Run ``service_control <args>`` elevated. Returns (ok, message)."""
-    fd, result_file = tempfile.mkstemp(prefix="correct-", suffix=".json")
-    os.close(fd)
+def run_service_command(args, result_file=None):
+    """Run ``service_control <args>`` elevated. Returns (ok, message).
+
+    Pass ``result_file`` to reuse the caller's --result-file path: the elevated
+    child writes it and it is left in place for the caller to read after we
+    return (e.g. the uninstaller parses it). Otherwise a temp file is created
+    and removed here.
+    """
+    owned = result_file is None
+    if owned:
+        fd, result_file = tempfile.mkstemp(prefix="correct-", suffix=".json")
+        os.close(fd)
     try:
         exe, params = build_command(args, result_file)
         src_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -75,10 +83,11 @@ def run_service_command(args):
         except (OSError, ValueError):
             return code == 0, f"exit code {code}"
     finally:
-        try:
-            os.remove(result_file)
-        except OSError:
-            pass
+        if owned:
+            try:
+                os.remove(result_file)
+            except OSError:
+                pass
 
 
 def ask_password_gui(account):

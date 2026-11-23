@@ -67,11 +67,6 @@ Name: "{autoprograms}\CORRECT\Uninstall CORRECT"; Filename: "{uninstallexe}"
 [Run]
 Filename: "{app}\runtime\pythonw.exe"; Parameters: "-m correct_admin.config_ui"; WorkingDir: "{app}\app"; Description: "Launch CORRECT Configuration"; Flags: postinstall nowait skipifsilent
 
-[UninstallRun]
-; Stop and delete the service + firewall rule. For a current-user install this asks for
-; Administrator approval, but only if the service was actually installed.
-Filename: "{app}\runtime\pythonw.exe"; Parameters: "-m correct_admin.service_control --elevate-if-needed remove-service"; WorkingDir: "{app}\app"; Flags: runhidden waituntilterminated; RunOnceId: "RemoveCorrectService"
-
 [UninstallDelete]
 ; Python writes __pycache__ at runtime; remove everything we put under {app}.
 Type: filesandordirs; Name: "{app}\runtime"
@@ -125,6 +120,49 @@ begin
   Result := Code;
 end;
 
+// Extract the "message" value from the {"ok": ..., "message": "..."} result file
+// the service helper writes, decoding the JSON escapes we emit (\n, \", \\).
+function JsonMessageValue(const S: String): String;
+var
+  KeyPos, I: Integer;
+begin
+  Result := '';
+  KeyPos := Pos('"message"', S);
+  if KeyPos = 0 then
+    Exit;
+  I := Pos(':', Copy(S, KeyPos, Length(S) - KeyPos + 1));
+  if I = 0 then
+    Exit;
+  I := KeyPos + I - 1;  // ':' in full-string coordinates
+  while (I <= Length(S)) and (S[I] <> '"') do
+    I := I + 1;
+  I := I + 1;
+  while I <= Length(S) do
+  begin
+    if S[I] = '\' then
+    begin
+      if I + 1 > Length(S) then
+        Break;
+      if S[I + 1] = 'n' then
+        Result := Result + #13#10
+      else if S[I + 1] = '"' then
+        Result := Result + '"'
+      else if S[I + 1] = '\' then
+        Result := Result + '\'
+      else
+        Result := Result + S[I + 1];
+      I := I + 2;
+    end
+    else if S[I] = '"' then
+      Break
+    else
+    begin
+      Result := Result + S[I];
+      I := I + 1;
+    end;
+  end;
+end;
+
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   Result := '';
@@ -148,9 +186,57 @@ end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
-  DataDir: String;
+  DataDir, ResultFile, Content, Msg: String;
+  Code: Integer;
+  HelperFailed: Boolean;
 begin
-  if CurUninstallStep = usPostUninstall then
+  if CurUninstallStep = usUninstall then
+  begin
+    // Stop and delete the service + firewall rule. For a current-user install this
+    // asks for Administrator approval, but only if the service was actually installed.
+    // The helper writes {ok, message} to the result file so a failure can be shown
+    // here (Inno itself ignores the exit code of uninstall-run programs).
+    ResultFile := ExpandConstant('{tmp}\correct-service-remove.json');
+    HelperFailed := False;
+    Msg := '';
+    Code := 0;
+    if not Exec(ExpandConstant('{app}\runtime\pythonw.exe'),
+                '-m correct_admin.service_control --result-file "' + ResultFile +
+                '" --elevate-if-needed remove-service',
+                ExpandConstant('{app}\app'), SW_HIDE, ewWaitUntilTerminated, Code) then
+    begin
+      HelperFailed := True;
+      Msg := 'the service removal helper could not be started';
+    end
+    else if Code <> 0 then
+    begin
+      HelperFailed := True;
+      if LoadStringFromFile(ResultFile, Content) then
+      begin
+        Msg := JsonMessageValue(Content);
+        if Pos('"ok": true', Content) > 0 then
+          HelperFailed := False;  // the helper reports success on disk; trust it
+      end;
+      if HelperFailed and (Msg = '') then
+        Msg := 'the service removal helper exited with code ' + IntToStr(Code);
+    end;
+    if HelperFailed then
+    begin
+      try
+        SaveStringToFile(GetEnv('TEMP') + '\CORRECT-uninstall.log',
+          GetDateTimeString('yyyy/mm/dd hh:nn:ss', '-', ':') + ' service removal failed: ' +
+          Msg + #13#10, True);
+      except
+      end;
+      if not UninstallSilent then
+        MsgBox('CORRECT could not remove its Windows service:'#13#10#13#10 + Msg +
+               #13#10#13#10 + 'The service will keep running. Remove it later from the ' +
+               'CORRECT Configuration app (Service tab > Remove service).',
+               mbCriticalError, MB_OK);
+    end;
+    DeleteFile(ResultFile);
+  end
+  else if CurUninstallStep = usPostUninstall then
   begin
     DataDir := GetDataDir('');
     if (not UninstallSilent) and DirExists(DataDir) then

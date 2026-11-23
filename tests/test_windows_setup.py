@@ -169,3 +169,53 @@ def test_cli_windows_only_commands_fail_cleanly_off_windows(tmp_path):
     rc = sc.main(["--result-file", str(result), "remove-service"])
     assert rc == 1
     assert "only available on Windows" in json.loads(result.read_text())["message"]
+
+
+# ── uninstall hardening ─────────────────────────────────────────────────────
+def test_failure_reset_args():
+    assert sc.failure_reset_args("CORRECT") == \
+        ["sc.exe", "failure", "CORRECT", "reset=", "0", "actions=", ""]
+
+
+def test_removal_outcome():
+    assert sc.removal_outcome(False) == "removed"
+    marked = sc.removal_outcome(True)
+    assert "reboot" in marked
+    assert marked != sc.removal_outcome(False)
+
+
+def test_elevated_rest_args_strips_elevate_and_result_file():
+    argv = ["--result-file", "C:\\Temp\\r.json", "--elevate-if-needed", "remove-service"]
+    assert sc.elevated_rest_args(argv) == ["remove-service"]
+
+
+def test_elevated_rest_args_keeps_other_args():
+    assert sc.elevated_rest_args(["--elevate-if-needed", "remove-service"]) == ["remove-service"]
+    assert sc.elevated_rest_args(["remove-service"]) == ["remove-service"]
+
+
+def test_main_elevate_reuses_caller_result_file(tmp_path, monkeypatch):
+    # The uninstaller launches service_control with --result-file unelevated; the
+    # elevated child's real failure message must reach that same file (the
+    # uninstaller parses it to show the error dialog).
+    result = tmp_path / "r.json"
+    recorded = {}
+
+    def fake_run_service_command(args, result_file=None):
+        recorded["args"] = args
+        recorded["result_file"] = result_file
+        return True, "removed"
+
+    class FakeController:
+        def is_installed(self):
+            return True
+
+    monkeypatch.setattr(sc, "IS_WINDOWS", True)
+    monkeypatch.setattr(sc, "is_admin", lambda: False)
+    monkeypatch.setattr(sc, "WindowsServiceController", FakeController)
+    monkeypatch.setattr(elevated, "run_service_command", fake_run_service_command)
+
+    rc = sc.main(["--result-file", str(result), "--elevate-if-needed", "remove-service"])
+    assert rc == 0
+    assert recorded["args"] == ["remove-service"]
+    assert recorded["result_file"] == str(result)

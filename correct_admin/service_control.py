@@ -124,7 +124,35 @@ def config_paths(config_path):
     return [os.path.expanduser(p) for p in out if p and not str(p).startswith("\\\\")], int(port)
 
 
-# ════════════════════════════════════════════════════════════════════════════
+def failure_reset_args(service):
+    """argv that clears a service's crash-recovery actions (SCM restart on failure)."""
+    return ["sc.exe", "failure", service, "reset=", "0", "actions=", ""]
+
+
+def removal_outcome(marked):
+    """Human summary for a completed DeleteService."""
+    if marked:
+        return ("removed; the entry is marked for deletion and disappears from "
+                "services.msc after the next reboot")
+    return "removed"
+
+
+def elevated_rest_args(argv):
+    """argv for the elevated child: drop --elevate-if-needed and --result-file.
+
+    The caller's result file goes to run_service_command() explicitly so the
+    child's real failure message survives to the launcher (the uninstaller reads it).
+    """
+    rest = [a for a in argv if a != "--elevate-if-needed"]
+    try:
+        i = rest.index("--result-file")
+        del rest[i:i + 2]
+    except ValueError:
+        pass
+    return rest
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # Windows
 # ════════════════════════════════════════════════════════════════════════════
 def _winerror(e):
@@ -355,11 +383,27 @@ class WindowsServiceController:
         return account
 
     def unregister(self):
+        """Stop and delete the service. Returns a short human summary."""
         import win32serviceutil
         if not self.is_installed():
-            return
-        self.stop()
+            return "not installed"
+        # Clear crash-recovery actions first: a crash-looping service (e.g. a
+        # startup bind failure) is relaunched by the SCM within seconds otherwise,
+        # which makes StopService refuse or time out and blocks the deletion.
+        try:
+            _run(failure_reset_args(self.name))
+        except Exception:
+            pass  # best effort: deletion must not depend on this
+        try:
+            self.stop()
+        except Exception:
+            pass  # a hung or flapping service must not block deletion
         win32serviceutil.RemoveService(self.name)
+        try:
+            marked = self.is_installed()
+        except Exception:
+            marked = True  # conservative: the summary then mentions the reboot clause
+        return removal_outcome(marked)
 
     def set_account(self, kind, user=None, password=None):
         """Change the logon account. Takes effect at the next service start."""
@@ -450,10 +494,14 @@ def change_account(config_path, kind, user=None, password=None, restart=True):
 
 
 def remove_service():
-    """Stop and delete the service and its firewall rule. Must run elevated."""
+    """Stop and delete the service and its firewall rule. Must run elevated.
+
+    Returns a short summary for the caller to show ('removed', 'not installed',
+    or the marked-for-deletion variant)."""
     from .setup_tasks import remove_firewall_rule
-    WindowsServiceController().unregister()
+    outcome = WindowsServiceController().unregister()
     remove_firewall_rule()
+    return outcome
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -614,8 +662,7 @@ def _execute(args):
         return "logs on as " + change_account(args.config or _default_config(), args.account,
                                               args.user, _resolve_password(args))
     if args.cmd == "remove-service":
-        remove_service()
-        return "removed"
+        return remove_service()
     if args.cmd == "firewall":
         from .setup_tasks import remove_firewall_rule, set_firewall_rule
         if args.remove:
@@ -645,9 +692,11 @@ def main(argv=None):
             if not firewall_rule_exists():
                 return 0  # nothing to do, no UAC prompt
         from .elevated import run_service_command
-        rest = [a for a in argv if a != "--elevate-if-needed"]
-        ok, message = run_service_command(rest)
-        _say(message, ok)
+        ok, message = run_service_command(elevated_rest_args(argv), result_file=args.result_file)
+        # With a result file the message is on disk for the launcher (the
+        # uninstaller reads it); printing to a hidden window would be lost anyway.
+        if not args.result_file:
+            _say(message, ok)
         return 0 if ok else 1
 
     ok, message = True, ""
