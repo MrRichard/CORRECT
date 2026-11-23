@@ -14,9 +14,9 @@ This is the first build to ship as installers. It is an **alpha** release, inten
 | File | Platform |
 |---|---|
 | `CORRECT-Setup-0.3.0-alpha.1.exe` | Windows 10/11 x64. Installs for all users (admin) or just for the current user. |
-| `correct_0.3.0~alpha.1-1_amd64.deb` | Debian 10+ / Ubuntu 20.04+ |
-| `correct-0.3.0~alpha.1-1.x86_64.rpm` | RHEL / Rocky / Alma 8+, Fedora |
-| `SHA256SUMS` | Checksums for the three files above |
+| `correct_0.3.0.alpha.1-1_amd64.deb` | Debian 10+ / Ubuntu 20.04+ |
+| `correct-0.3.0.alpha.1-1.x86_64.rpm` | RHEL / Rocky / Alma 8+, Fedora |
+| `SHA256SUMS` | Checksums for the three files above (`sha256sum -c SHA256SUMS`) |
 
 Every installer bundles its own Python 3.11.18. No system Python and no internet access are needed on the target machine.
 

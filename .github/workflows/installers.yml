@@ -244,8 +244,13 @@ jobs:
           name: CORRECT-linux
           path: dist
 
+      # GitHub replaces '~' with '.' in uploaded asset names (nFPM writes a pre-release
+      # 0.3.0-alpha.1 as 0.3.0~alpha.1), so rename first or SHA256SUMS won't match the downloads.
       - name: Checksums
-        run: cd dist && sha256sum CORRECT-Setup-*.exe correct_*.deb correct-*.rpm > SHA256SUMS && cat SHA256SUMS
+        run: |
+          cd dist
+          for f in *~*; do if [ -e "$f" ]; then mv -v "$f" "${f//\~/.}"; fi; done
+          sha256sum CORRECT-Setup-*.exe correct_*.deb correct-*.rpm > SHA256SUMS && cat SHA256SUMS
 
       # Draft: nothing is public until someone presses Publish on the release page.
       - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65  # v2.6.2
